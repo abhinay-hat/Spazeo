@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation'
 import { UserButton, useUser } from '@clerk/nextjs'
 import {
   LayoutDashboard,
-  Image,
+  Compass,
   BarChart3,
   Users,
   Settings,
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { Logo } from '@/components/ui/Logo'
 
 interface NavItem {
   label: string
@@ -24,11 +25,14 @@ interface NavItem {
   icon: LucideIcon
 }
 
-const NAV_ITEMS: NavItem[] = [
+const MAIN_NAV: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { label: 'My Tours', href: '/tours', icon: Image },
+  { label: 'Tours', href: '/tours', icon: Compass },
   { label: 'Analytics', href: '/analytics', icon: BarChart3 },
   { label: 'Leads', href: '/leads', icon: Users },
+]
+
+const BOTTOM_NAV: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: Settings },
   { label: 'Billing', href: '/billing', icon: CreditCard },
 ]
@@ -49,22 +53,20 @@ function NavLinkItem({
       href={item.href}
       onClick={onClick}
       className={cn(
-        'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 cursor-pointer',
+        'flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm transition-all duration-200 cursor-pointer',
         isActive
-          ? 'text-[#D4A017]'
-          : 'text-[#6B6560] hover:text-[#F5F3EF] hover:bg-[rgba(212,160,23,0.06)]'
+          ? 'bg-[rgba(212,160,23,0.08)] text-[#D4A017] font-medium'
+          : 'text-[#A8A29E] hover:text-[#F5F3EF] hover:bg-[rgba(212,160,23,0.06)]'
       )}
-      style={
-        isActive
-          ? {
-              backgroundColor: 'rgba(212, 160, 23, 0.08)',
-              border: '1px solid rgba(212, 160, 23, 0.2)',
-            }
-          : undefined
-      }
+      style={{ fontFamily: 'var(--font-dmsans)' }}
       aria-current={isActive ? 'page' : undefined}
     >
-      <Icon size={20} strokeWidth={1.5} className="shrink-0" aria-hidden="true" />
+      <Icon
+        size={20}
+        strokeWidth={1.5}
+        className={cn('shrink-0', isActive ? 'text-[#D4A017]' : 'text-[#6B6560]')}
+        aria-hidden="true"
+      />
       {item.label}
     </Link>
   )
@@ -85,38 +87,15 @@ function SidebarContent({
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full py-6 px-4">
       {/* Logo */}
-      <div
-        className="h-16 flex items-center px-5 shrink-0"
-        style={{ borderBottom: '1px solid rgba(212, 160, 23, 0.1)' }}
-      >
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-1"
-          aria-label="Spazeo dashboard home"
-          onClick={onNavClick}
-        >
-          <span
-            className="text-lg font-black"
-            style={{ fontFamily: 'var(--font-jakarta)', color: '#F5F3EF' }}
-          >
-            SPAZEO
-          </span>
-          <span
-            className="w-1.5 h-1.5 rounded-full mb-0.5"
-            style={{ backgroundColor: '#D4A017' }}
-            aria-hidden="true"
-          />
-        </Link>
+      <div className="px-1 mb-6">
+        <Logo href="/dashboard" />
       </div>
 
-      {/* Nav items */}
-      <nav
-        className="flex-1 overflow-y-auto py-4 px-3 flex flex-col gap-1"
-        aria-label="Dashboard navigation"
-      >
-        {NAV_ITEMS.map((item) => (
+      {/* Main nav items */}
+      <nav className="flex flex-col gap-1" aria-label="Dashboard navigation">
+        {MAIN_NAV.map((item) => (
           <NavLinkItem
             key={item.href}
             item={item}
@@ -126,27 +105,50 @@ function SidebarContent({
         ))}
       </nav>
 
-      {/* User section */}
-      <div
-        className="p-4 shrink-0"
-        style={{ borderTop: '1px solid rgba(212, 160, 23, 0.1)' }}
-      >
-        <div className="flex items-center gap-3">
-          <UserButton
-            appearance={{
-              elements: {
-                avatarBox: 'w-8 h-8',
-              },
-            }}
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* Bottom nav items */}
+      <nav className="flex flex-col gap-1 mb-4" aria-label="Settings navigation">
+        {BOTTOM_NAV.map((item) => (
+          <NavLinkItem
+            key={item.href}
+            item={item}
+            isActive={isActive(item.href)}
+            onClick={onNavClick}
           />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate" style={{ color: '#F5F3EF' }}>
-              {user?.fullName ?? 'User'}
-            </p>
-            <p className="text-xs truncate" style={{ color: '#5A5248' }}>
-              {user?.primaryEmailAddress?.emailAddress ?? ''}
-            </p>
-          </div>
+        ))}
+      </nav>
+
+      {/* Divider */}
+      <div className="h-px bg-[rgba(212,160,23,0.12)] mb-4" />
+
+      {/* User section */}
+      <div className="flex items-center gap-3 px-1 py-2">
+        <UserButton
+          appearance={{
+            elements: {
+              avatarBox: 'w-9 h-9',
+            },
+          }}
+        />
+        <div className="flex flex-col gap-0.5 min-w-0">
+          <span
+            className="text-[13px] font-medium text-[#F5F3EF] truncate"
+            style={{ fontFamily: 'var(--font-dmsans)' }}
+          >
+            {user?.fullName ?? 'User'}
+          </span>
+          <span
+            className="inline-block w-fit text-[10px] font-medium px-1.5 py-0.5 rounded"
+            style={{
+              backgroundColor: 'rgba(212,160,23,0.13)',
+              color: '#D4A017',
+              fontFamily: 'var(--font-dmsans)',
+            }}
+          >
+            Pro Plan
+          </span>
         </div>
       </div>
     </div>
@@ -176,11 +178,7 @@ export function Sidebar() {
     <>
       {/* Desktop sidebar */}
       <aside
-        className="hidden md:flex fixed left-0 top-0 w-[240px] h-full flex-col z-30"
-        style={{
-          backgroundColor: '#12100E',
-          borderRight: '1px solid rgba(212, 160, 23, 0.1)',
-        }}
+        className="hidden md:flex fixed left-0 top-0 w-[240px] h-full flex-col z-30 bg-[#12100E] border-r border-[rgba(212,160,23,0.12)]"
         aria-label="Dashboard sidebar"
       >
         <SidebarContent pathname={pathname} />
@@ -188,12 +186,7 @@ export function Sidebar() {
 
       {/* Mobile toggle button */}
       <button
-        className="md:hidden fixed top-3.5 left-4 z-40 flex items-center justify-center w-9 h-9 rounded-xl backdrop-blur-xl transition-colors duration-200"
-        style={{
-          backgroundColor: 'rgba(18, 16, 14, 0.88)',
-          border: '1px solid rgba(212, 160, 23, 0.12)',
-          color: '#A8A29E',
-        }}
+        className="md:hidden fixed top-3.5 left-4 z-40 flex items-center justify-center w-9 h-9 rounded-xl backdrop-blur-xl transition-colors duration-200 bg-[rgba(18,16,14,0.88)] border border-[rgba(212,160,23,0.12)] text-[#A8A29E]"
         onClick={() => setMobileOpen(true)}
         aria-label="Open navigation menu"
         aria-expanded={mobileOpen}
@@ -228,15 +221,10 @@ export function Sidebar() {
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: -280, opacity: 0 }}
               transition={{ type: 'tween', duration: 0.28, ease: 'easeOut' }}
-              className="fixed left-0 top-0 z-50 w-[240px] h-full flex flex-col md:hidden"
-              style={{
-                backgroundColor: '#12100E',
-                borderRight: '1px solid rgba(212, 160, 23, 0.1)',
-              }}
+              className="fixed left-0 top-0 z-50 w-[240px] h-full flex flex-col md:hidden bg-[#12100E] border-r border-[rgba(212,160,23,0.12)]"
             >
               <button
-                className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 rounded-xl transition-colors duration-200"
-                style={{ color: '#6B6560' }}
+                className="absolute top-4 right-4 flex items-center justify-center w-8 h-8 rounded-xl transition-colors duration-200 text-[#6B6560] hover:text-[#F5F3EF]"
                 onClick={() => setMobileOpen(false)}
                 aria-label="Close navigation menu"
               >

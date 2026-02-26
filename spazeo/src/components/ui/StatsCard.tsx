@@ -1,57 +1,55 @@
 'use client'
 
 import { cn } from '@/lib/utils'
-import { formatNumber } from '@/lib/utils'
 
 interface StatsCardProps {
-  icon: React.ReactNode
   label: string
   value: number | string
   change?: number
+  icon?: React.ReactNode
   className?: string
 }
 
-export function StatsCard({ icon, label, value, change, className }: StatsCardProps) {
+export function StatsCard({ label, value, change, icon, className }: StatsCardProps) {
   return (
     <div
       className={cn(
-        'rounded-2xl p-6 transition-all duration-300 hover:-translate-y-0.5',
+        'flex flex-col gap-3 rounded-xl bg-[#1B1916] border border-[rgba(212,160,23,0.12)] p-5 px-6',
         className
       )}
-      style={{
-        backgroundColor: '#12100E',
-        border: '1px solid rgba(212, 160, 23, 0.12)',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.3)',
-      }}
     >
-      <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center"
-        style={{
-          backgroundColor: 'rgba(212, 160, 23, 0.08)',
-          border: '1px solid rgba(212, 160, 23, 0.2)',
-          color: '#D4A017',
-        }}
-      >
-        {icon}
-      </div>
-
-      <p className="text-sm font-medium mt-4" style={{ color: '#6B6560' }}>{label}</p>
-
-      <p
-        className="text-3xl font-black mt-1.5"
-        style={{ fontFamily: 'var(--font-jakarta)', color: '#F5F3EF' }}
-      >
-        {typeof value === 'number' ? formatNumber(value) : value}
-      </p>
-
-      {change !== undefined && (
-        <div className="mt-2 flex items-center gap-1 text-xs font-semibold">
-          <span className={change >= 0 ? 'text-emerald-400' : 'text-red-400'}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {icon && (
+            <span className="text-[#6B6560]">{icon}</span>
+          )}
+          <span
+            className="text-[13px] text-[#A8A29E]"
+            style={{ fontFamily: 'var(--font-dmsans)' }}
+          >
+            {label}
+          </span>
+        </div>
+        {change !== undefined && (
+          <span
+            className={cn(
+              'rounded-md px-2 py-0.5 text-[11px] font-semibold',
+              change >= 0
+                ? 'bg-[rgba(52,211,153,0.13)] text-[#34D399]'
+                : 'bg-[rgba(248,113,113,0.13)] text-[#F87171]'
+            )}
+            style={{ fontFamily: 'var(--font-dmsans)' }}
+          >
             {change >= 0 ? '+' : ''}{change}%
           </span>
-          <span className="font-normal ml-1" style={{ color: '#5A5248' }}>vs last month</span>
-        </div>
-      )}
+        )}
+      </div>
+      <span
+        className="text-[32px] font-bold text-[#F5F3EF]"
+        style={{ fontFamily: 'var(--font-jakarta)' }}
+      >
+        {typeof value === 'number' ? value.toLocaleString() : value}
+      </span>
     </div>
   )
 }

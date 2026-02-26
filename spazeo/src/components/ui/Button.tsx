@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Loader2 } from 'lucide-react'
 import type { ComponentPropsWithoutRef } from 'react'
 
-type ButtonVariant = 'primary' | 'secondary' | 'cta' | 'ghost' | 'teal'
+type ButtonVariant = 'primary' | 'secondary' | 'cta' | 'ghost' | 'teal' | 'danger'
 type ButtonSize = 'sm' | 'md' | 'lg'
 
 interface ButtonProps extends ComponentPropsWithoutRef<'button'> {
@@ -23,9 +23,11 @@ const variantClasses: Record<ButtonVariant, string> = {
   cta:
     'bg-[#FB7A54] hover:bg-[#F46036] text-white shadow-[0_0_20px_rgba(251,122,84,0.3)] hover:shadow-[0_0_35px_rgba(251,122,84,0.45)]',
   ghost:
-    'bg-transparent text-[#D4A017] hover:text-[#E5B120] hover:bg-[rgba(212,160,23,0.06)]',
+    'bg-transparent text-[#A8A29E] hover:text-[#F5F3EF] hover:bg-[rgba(212,160,23,0.06)]',
   teal:
     'bg-[#2DD4BF] hover:bg-[#14B8A6] text-[#0A0908] shadow-[0_0_20px_rgba(45,212,191,0.25)] hover:shadow-[0_0_32px_rgba(45,212,191,0.40)]',
+  danger:
+    'bg-[rgba(248,113,113,0.08)] hover:bg-[rgba(248,113,113,0.15)] text-[#F87171] border border-[rgba(248,113,113,0.2)] hover:border-[rgba(248,113,113,0.35)]',
 }
 
 const sizeClasses: Record<ButtonSize, string> = {

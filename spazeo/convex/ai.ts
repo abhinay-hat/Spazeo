@@ -1,165 +1,93 @@
 import { v } from 'convex/values'
-import { action, internalMutation } from './_generated/server'
-import { internal } from './_generated/api'
+import { query } from './_generated/server'
 
-export const createJob = internalMutation({
+// --- Queries ---
+
+export const listJobs = query({
   args: {
-    tourId: v.id('tours'),
-    sceneId: v.optional(v.id('scenes')),
-    type: v.union(
-      v.literal('scene_analysis'),
-      v.literal('staging'),
-      v.literal('description'),
-      v.literal('floor_plan'),
-      v.literal('enhancement'),
-      v.literal('auto_hotspots')
+    type: v.optional(
+      v.union(
+        v.literal('scene_analysis'),
+        v.literal('staging'),
+        v.literal('description'),
+        v.literal('floor_plan'),
+        v.literal('enhancement'),
+        v.literal('auto_hotspots')
+      )
     ),
-    input: v.optional(v.any()),
-    provider: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert('aiJobs', {
-      ...args,
-      status: 'pending',
-    })
-  },
-})
-
-export const updateJobStatus = internalMutation({
-  args: {
-    jobId: v.id('aiJobs'),
-    status: v.union(
-      v.literal('pending'),
-      v.literal('processing'),
-      v.literal('completed'),
-      v.literal('failed')
+    status: v.optional(
+      v.union(
+        v.literal('pending'),
+        v.literal('processing'),
+        v.literal('completed'),
+        v.literal('failed')
+      )
     ),
-    output: v.optional(v.any()),
-    error: v.optional(v.string()),
+    tourId: v.optional(v.id('tours')),
   },
   handler: async (ctx, args) => {
-    const { jobId, ...updates } = args
-    const cleanUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined)
-    )
-    await ctx.db.patch(jobId, cleanUpdates)
-  },
-})
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return []
 
-export const analyzeScene = action({
-  args: {
-    jobId: v.id('aiJobs'),
-    sceneStorageId: v.id('_storage'),
-  },
-  handler: async (ctx, args) => {
-    await ctx.runMutation(internal.ai.updateJobStatus, {
-      jobId: args.jobId,
-      status: 'processing',
-    })
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) return []
 
-    try {
-      const imageUrl = await ctx.storage.getUrl(args.sceneStorageId)
-      if (!imageUrl) throw new Error('Image not found in storage')
+    let jobs = await ctx.db
+      .query('aiJobs')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .order('desc')
+      .collect()
 
-      // Call OpenAI Vision API for scene analysis
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'Analyze this 360° panorama image. Return JSON with: roomType (string), objects (array of strings), features (array of strings), qualityScore (1-10). Only return valid JSON.',
-                },
-                { type: 'image_url', image_url: { url: imageUrl } },
-              ],
-            },
-          ],
-          max_tokens: 500,
-        }),
-      })
-
-      const data = await response.json()
-      const analysis = JSON.parse(data.choices[0].message.content)
-
-      await ctx.runMutation(internal.ai.updateJobStatus, {
-        jobId: args.jobId,
-        status: 'completed',
-        output: analysis,
-      })
-
-      return analysis
-    } catch (error) {
-      await ctx.runMutation(internal.ai.updateJobStatus, {
-        jobId: args.jobId,
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      })
-      throw error
+    if (args.type) {
+      jobs = jobs.filter((j) => j.type === args.type)
     }
+    if (args.status) {
+      jobs = jobs.filter((j) => j.status === args.status)
+    }
+    if (args.tourId) {
+      jobs = jobs.filter((j) => j.tourId === args.tourId)
+    }
+
+    return jobs
   },
 })
 
-export const generateDescription = action({
-  args: {
-    jobId: v.id('aiJobs'),
-    tourTitle: v.string(),
-    sceneAnalyses: v.array(v.any()),
-  },
+export const getJobsByTour = query({
+  args: { tourId: v.id('tours') },
   handler: async (ctx, args) => {
-    await ctx.runMutation(internal.ai.updateJobStatus, {
-      jobId: args.jobId,
-      status: 'processing',
-    })
+    return await ctx.db
+      .query('aiJobs')
+      .withIndex('by_tourId', (q) => q.eq('tourId', args.tourId))
+      .order('desc')
+      .collect()
+  },
+})
 
-    try {
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o',
-          messages: [
-            {
-              role: 'system',
-              content:
-                'You are a real estate marketing copywriter. Write compelling, professional property descriptions based on scene analysis data.',
-            },
-            {
-              role: 'user',
-              content: `Write a property marketing description for "${args.tourTitle}" based on these room analyses: ${JSON.stringify(args.sceneAnalyses)}. Keep it under 200 words, highlight key features, and make it engaging for potential buyers.`,
-            },
-          ],
-          max_tokens: 400,
-        }),
-      })
+export const getUsage = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
 
-      const data = await response.json()
-      const description = data.choices[0].message.content
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) return null
 
-      await ctx.runMutation(internal.ai.updateJobStatus, {
-        jobId: args.jobId,
-        status: 'completed',
-        output: { description },
-      })
+    const creditsUsed = user.aiCreditsUsed ?? 0
+    const isUnlimited =
+      user.plan === 'professional' || user.plan === 'business' || user.plan === 'enterprise'
+    const limit = isUnlimited ? -1 : user.plan === 'starter' ? 5 : 3
 
-      return description
-    } catch (error) {
-      await ctx.runMutation(internal.ai.updateJobStatus, {
-        jobId: args.jobId,
-        status: 'failed',
-        error: error instanceof Error ? error.message : 'Unknown error',
-      })
-      throw error
+    return {
+      creditsUsed,
+      limit,
+      isUnlimited,
+      remaining: isUnlimited ? -1 : Math.max(0, limit - creditsUsed),
     }
   },
 })

@@ -1,35 +1,34 @@
 import { v } from 'convex/values'
-import { action } from './_generated/server'
+import { query } from './_generated/server'
 
-export const searchTours = action({
+export const searchTours = query({
   args: {
     query: v.string(),
+    status: v.optional(
+      v.union(v.literal('draft'), v.literal('published'), v.literal('archived'))
+    ),
   },
   handler: async (ctx, args) => {
-    // Generate embedding for the search query
-    const embeddingResponse = await fetch('https://api.openai.com/v1/embeddings', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'text-embedding-3-small',
-        input: args.query,
-      }),
-    })
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return []
 
-    const embeddingData = await embeddingResponse.json()
-    const embedding = embeddingData.data[0].embedding
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) return []
 
-    // Use Convex vector search to find similar tours
-    // Note: Vector search requires a vector index on the tours table
-    // This will be set up when vector indexes are configured
-    const results = await ctx.vectorSearch('tours', 'by_embedding', {
-      vector: embedding,
-      limit: 10,
-    })
+    let searchQuery = ctx.db
+      .query('tours')
+      .withSearchIndex('search_tours', (q) => {
+        let search = q.search('title', args.query).eq('userId', user._id)
+        if (args.status) {
+          search = search.eq('status', args.status)
+        }
+        return search
+      })
 
+    const results = await searchQuery.take(20)
     return results
   },
 })

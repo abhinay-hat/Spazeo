@@ -5,12 +5,22 @@ import { ClerkProvider, useAuth } from '@clerk/nextjs'
 import { ConvexReactClient } from 'convex/react'
 import { type ReactNode } from 'react'
 
-const convex = new ConvexReactClient(process.env.NEXT_PUBLIC_CONVEX_URL!)
+const convexUrl = process.env.NEXT_PUBLIC_CONVEX_URL
+const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+
+export const isProvidersConfigured =
+  convexUrl && (convexUrl.startsWith('https://') || convexUrl.startsWith('http://')) && clerkKey && clerkKey.startsWith('pk_')
+
+const convex = isProvidersConfigured ? new ConvexReactClient(convexUrl as string) : null
 
 export function ConvexClientProvider({ children }: { children: ReactNode }) {
+  if (!convex || !isProvidersConfigured) {
+    return <>{children}</>
+  }
+
   return (
     <ClerkProvider
-      publishableKey={process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY!}
+      publishableKey={clerkKey}
       appearance={{
         variables: {
           colorPrimary: '#D4A017',

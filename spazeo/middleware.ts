@@ -1,4 +1,9 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server'
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+
+const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
+const isClerkConfigured = clerkKey && clerkKey.startsWith('pk_')
 
 const isProtectedRoute = createRouteMatcher([
   '/dashboard(.*)',
@@ -9,11 +14,19 @@ const isProtectedRoute = createRouteMatcher([
   '/billing(.*)',
 ])
 
-export default clerkMiddleware(async (auth, req) => {
+// When Clerk is properly configured, use Clerk middleware for route protection
+const clerkHandler = clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
     await auth.protect()
   }
 })
+
+// When Clerk is NOT configured (placeholder keys), allow all routes through
+function passthroughHandler(req: NextRequest) {
+  return NextResponse.next()
+}
+
+export default isClerkConfigured ? clerkHandler : passthroughHandler
 
 export const config = {
   matcher: [

@@ -5,13 +5,15 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Menu, X, ArrowRight } from 'lucide-react'
+import { Menu, X } from 'lucide-react'
+import { Logo } from '@/components/ui/Logo'
+import { isProvidersConfigured } from '@/components/providers/ConvexClientProvider'
 
 const NAV_LINKS = [
-  { label: 'Product', href: '/#features' },
+  { label: 'Product', href: '/product' },
+  { label: 'Features', href: '/features' },
   { label: 'Pricing', href: '/pricing' },
-  { label: 'Docs', href: '/docs' },
-  { label: 'Blog', href: '/blog' },
+  { label: 'About', href: '/about' },
 ]
 
 export function Navbar() {
@@ -46,101 +48,107 @@ export function Navbar() {
   return (
     <>
       <header
+        className="fixed top-0 w-full z-50 h-16 transition-all duration-300 border-b border-[rgba(212,160,23,0.12)]"
         style={
           scrolled
             ? {
                 backgroundColor: 'rgba(10, 9, 8, 0.92)',
                 backdropFilter: 'blur(24px)',
                 WebkitBackdropFilter: 'blur(24px)',
-                borderBottom: '1px solid rgba(212, 160, 23, 0.12)',
-                boxShadow: '0 1px 0 rgba(212, 160, 23, 0.06)',
               }
             : {
-                backgroundColor: 'transparent',
+                backgroundColor: '#0A0908',
               }
         }
-        className="fixed top-0 w-full z-50 h-16 transition-all duration-300"
       >
-        <div className="max-w-7xl mx-auto px-6 h-full flex items-center justify-between">
-          {/* Left — Logo */}
-          <Link
-            href="/"
-            aria-label="Spazeo home"
-            className="flex items-center hover:opacity-80 transition-opacity duration-200"
-          >
-            <span
-              style={{
-                fontFamily: 'var(--font-jakarta)',
-                color: '#F5F3EF',
-              }}
-              className="text-xl font-black tracking-[-0.5px] transition-colors duration-300"
-            >
-              SPAZEO
-            </span>
-            <span
-              style={{ backgroundColor: '#D4A017' }}
-              className="inline-block w-1.5 h-1.5 rounded-full ml-0.5 mb-1 shrink-0 transition-colors duration-300"
-            />
-          </Link>
+        <div className="max-w-7xl mx-auto px-6 lg:px-[60px] h-full flex items-center justify-between">
+          {/* Left — Logo + Nav Links */}
+          <div className="flex items-center gap-10">
+            <Logo href="/" />
 
-          {/* Center — Desktop Nav Links */}
-          <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
-            {NAV_LINKS.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                style={{ color: '#A8A29E' }}
-                className="text-sm font-medium transition-colors duration-200 hover:text-[#F5F3EF]"
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
+            <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
+              {NAV_LINKS.map((link) => {
+                const isActive = link.href.startsWith('/')
+                  && !link.href.includes('#')
+                  && pathname.startsWith(link.href)
+                return (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className={`text-sm font-medium transition-colors duration-200 ${
+                      isActive
+                        ? 'text-[#D4A017]'
+                        : 'text-[#A8A29E] hover:text-[#F5F3EF]'
+                    }`}
+                    style={{ fontFamily: 'var(--font-dmsans)' }}
+                  >
+                    {link.label}
+                  </Link>
+                )
+              })}
+            </nav>
+          </div>
 
           {/* Right — Auth Actions + Mobile Toggle */}
-          <div className="flex items-center gap-4">
-            <SignedOut>
-              <Link
-                href="/sign-in"
-                style={{ color: '#A8A29E' }}
-                className="hidden md:inline-flex text-sm font-medium transition-colors duration-200 hover:text-[#F5F3EF]"
-              >
-                Log in
-              </Link>
-              <Link
-                href="/sign-up"
-                style={{
-                  backgroundColor: '#D4A017',
-                  color: '#0A0908',
-                }}
-                className="hidden md:inline-flex items-center gap-1.5 text-sm font-semibold px-5 py-2 rounded-lg transition-all duration-300 hover:shadow-[0_4px_16px_rgba(212,160,23,0.25)]"
-              >
-                Get started
-                <ArrowRight size={14} />
-              </Link>
-            </SignedOut>
+          <div className="flex items-center gap-3">
+            {isProvidersConfigured ? (
+              <>
+                <SignedOut>
+                  <Link
+                    href="/sign-in"
+                    className="hidden md:inline-flex items-center rounded-lg px-6 py-3 text-sm font-medium text-[#A8A29E] transition-colors duration-200 hover:text-[#F5F3EF]"
+                    style={{ fontFamily: 'var(--font-dmsans)' }}
+                  >
+                    Log In
+                  </Link>
+                  <Link
+                    href="/sign-up"
+                    className="hidden md:inline-flex items-center rounded-lg px-6 py-3 bg-[#D4A017] text-sm font-semibold text-[#0A0908] transition-all duration-300 hover:bg-[#E5B120] hover:shadow-[0_0_20px_rgba(212,160,23,0.25)]"
+                    style={{ fontFamily: 'var(--font-dmsans)' }}
+                  >
+                    Get Started
+                  </Link>
+                </SignedOut>
 
-            <SignedIn>
-              <Link
-                href="/dashboard"
-                className="hidden md:inline-flex items-center text-sm font-medium transition-colors duration-200 hover:text-[#F5F3EF]"
-                style={{ color: '#A8A29E' }}
-              >
-                Dashboard
-              </Link>
-              <UserButton
-                appearance={{
-                  elements: {
-                    avatarBox: 'w-8 h-8',
-                  },
-                }}
-              />
-            </SignedIn>
+                <SignedIn>
+                  <Link
+                    href="/dashboard"
+                    className="hidden md:inline-flex items-center text-sm font-medium text-[#A8A29E] transition-colors duration-200 hover:text-[#F5F3EF]"
+                    style={{ fontFamily: 'var(--font-dmsans)' }}
+                  >
+                    Dashboard
+                  </Link>
+                  <UserButton
+                    appearance={{
+                      elements: {
+                        avatarBox: 'w-8 h-8',
+                      },
+                    }}
+                  />
+                </SignedIn>
+              </>
+            ) : (
+              <>
+                <Link
+                  href="/sign-in"
+                  className="hidden md:inline-flex items-center rounded-lg px-6 py-3 text-sm font-medium text-[#A8A29E] transition-colors duration-200 hover:text-[#F5F3EF]"
+                  style={{ fontFamily: 'var(--font-dmsans)' }}
+                >
+                  Log In
+                </Link>
+                <Link
+                  href="/sign-up"
+                  className="hidden md:inline-flex items-center rounded-lg px-6 py-3 bg-[#D4A017] text-sm font-semibold text-[#0A0908] transition-all duration-300 hover:bg-[#E5B120] hover:shadow-[0_0_20px_rgba(212,160,23,0.25)]"
+                  style={{ fontFamily: 'var(--font-dmsans)' }}
+                >
+                  Get Started
+                </Link>
+              </>
+            )}
 
             {/* Mobile menu toggle */}
             <button
-              className="md:hidden flex items-center justify-center transition-colors duration-200"
-              style={{ color: '#A8A29E' }}
+              className="md:hidden flex items-center justify-center text-[#A8A29E] transition-colors duration-200"
               onClick={() => setMobileOpen((prev) => !prev)}
               aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
               aria-expanded={mobileOpen}
@@ -182,92 +190,89 @@ export function Navbar() {
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: '100%' }}
               transition={{ type: 'spring', damping: 30 }}
-              className="fixed right-0 top-0 h-full w-80 max-w-full flex flex-col z-50 md:hidden"
-              style={{
-                backgroundColor: '#12100E',
-                borderLeft: '1px solid rgba(212, 160, 23, 0.12)',
-              }}
+              className="fixed right-0 top-0 h-full w-80 max-w-full flex flex-col z-50 md:hidden bg-[#12100E] border-l border-[rgba(212,160,23,0.12)]"
             >
-              <div
-                className="h-16 flex items-center justify-between px-6"
-                style={{ borderBottom: '1px solid rgba(212, 160, 23, 0.1)' }}
-              >
-                <Link
-                  href="/"
-                  aria-label="Spazeo home"
-                  className="flex items-center hover:opacity-80 transition-opacity duration-200"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  <span
-                    style={{ fontFamily: 'var(--font-jakarta)', color: '#F5F3EF' }}
-                    className="text-xl font-black tracking-[-0.5px]"
-                  >
-                    SPAZEO
-                  </span>
-                  <span
-                    style={{ backgroundColor: '#D4A017' }}
-                    className="inline-block w-1.5 h-1.5 rounded-full ml-0.5 mb-1 shrink-0"
-                  />
-                </Link>
+              <div className="h-16 flex items-center justify-between px-6 border-b border-[rgba(212,160,23,0.1)]">
+                <Logo href="/" />
                 <button
                   onClick={() => setMobileOpen(false)}
                   aria-label="Close menu"
-                  style={{ color: '#6B6560' }}
-                  className="transition-colors duration-200 hover:text-[#F5F3EF]"
+                  className="text-[#6B6560] transition-colors duration-200 hover:text-[#F5F3EF]"
                 >
                   <X size={20} />
                 </button>
               </div>
 
               <nav className="flex-1 flex flex-col gap-1 p-6" aria-label="Mobile navigation">
-                {NAV_LINKS.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={() => setMobileOpen(false)}
-                    style={{
-                      color: '#A8A29E',
-                      borderBottom: '1px solid rgba(212, 160, 23, 0.06)',
-                    }}
-                    className="text-base font-medium py-3 transition-colors duration-200 hover:text-[#F5F3EF]"
-                  >
-                    {link.label}
-                  </Link>
-                ))}
+                {NAV_LINKS.map((link) => {
+                  const isActive = link.href.startsWith('/')
+                    && !link.href.includes('#')
+                    && pathname.startsWith(link.href)
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={`text-base font-medium py-3 border-b border-[rgba(212,160,23,0.06)] transition-colors duration-200 ${
+                        isActive
+                          ? 'text-[#D4A017]'
+                          : 'text-[#A8A29E] hover:text-[#F5F3EF]'
+                      }`}
+                      style={{ fontFamily: 'var(--font-dmsans)' }}
+                    >
+                      {link.label}
+                    </Link>
+                  )
+                })}
               </nav>
 
               <div className="p-6 flex flex-col gap-3">
-                <SignedOut>
-                  <Link
-                    href="/sign-in"
-                    onClick={() => setMobileOpen(false)}
-                    className="w-full py-3 text-center rounded-xl text-sm font-medium transition-colors duration-200"
-                    style={{
-                      border: '1px solid rgba(212, 160, 23, 0.2)',
-                      color: '#A8A29E',
-                    }}
-                  >
-                    Log in
-                  </Link>
-                  <Link
-                    href="/sign-up"
-                    onClick={() => setMobileOpen(false)}
-                    className="w-full py-3 text-center rounded-xl text-sm font-bold transition-all duration-200 hover:bg-[#E5B120]"
-                    style={{ backgroundColor: '#D4A017', color: '#0A0908' }}
-                  >
-                    Get started
-                  </Link>
-                </SignedOut>
-                <SignedIn>
-                  <Link
-                    href="/dashboard"
-                    onClick={() => setMobileOpen(false)}
-                    className="w-full py-3 text-center rounded-xl text-sm font-bold transition-all duration-200 hover:bg-[#E5B120]"
-                    style={{ backgroundColor: '#D4A017', color: '#0A0908' }}
-                  >
-                    Dashboard
-                  </Link>
-                </SignedIn>
+                {isProvidersConfigured ? (
+                  <>
+                    <SignedOut>
+                      <Link
+                        href="/sign-in"
+                        onClick={() => setMobileOpen(false)}
+                        className="w-full py-3 text-center rounded-xl text-sm font-medium text-[#A8A29E] border border-[rgba(212,160,23,0.2)] transition-colors duration-200"
+                      >
+                        Log In
+                      </Link>
+                      <Link
+                        href="/sign-up"
+                        onClick={() => setMobileOpen(false)}
+                        className="w-full py-3 text-center rounded-xl text-sm font-bold bg-[#D4A017] text-[#0A0908] transition-all duration-200 hover:bg-[#E5B120]"
+                      >
+                        Get Started
+                      </Link>
+                    </SignedOut>
+                    <SignedIn>
+                      <Link
+                        href="/dashboard"
+                        onClick={() => setMobileOpen(false)}
+                        className="w-full py-3 text-center rounded-xl text-sm font-bold bg-[#D4A017] text-[#0A0908] transition-all duration-200 hover:bg-[#E5B120]"
+                      >
+                        Dashboard
+                      </Link>
+                    </SignedIn>
+                  </>
+                ) : (
+                  <>
+                    <Link
+                      href="/sign-in"
+                      onClick={() => setMobileOpen(false)}
+                      className="w-full py-3 text-center rounded-xl text-sm font-medium text-[#A8A29E] border border-[rgba(212,160,23,0.2)] transition-colors duration-200"
+                    >
+                      Log In
+                    </Link>
+                    <Link
+                      href="/sign-up"
+                      onClick={() => setMobileOpen(false)}
+                      className="w-full py-3 text-center rounded-xl text-sm font-bold bg-[#D4A017] text-[#0A0908] transition-all duration-200 hover:bg-[#E5B120]"
+                    >
+                      Get Started
+                    </Link>
+                  </>
+                )}
               </div>
             </motion.div>
           </>

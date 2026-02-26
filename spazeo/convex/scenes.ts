@@ -1,5 +1,10 @@
 import { v } from 'convex/values'
-import { query, mutation } from './_generated/server'
+import { query, mutation, internalMutation } from './_generated/server'
+import { internal as _internal } from './_generated/api'
+
+// Cast to break circular type reference (api.d.ts imports this module's types)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const internal = _internal as any
 
 export const listByTour = query({
   args: { tourId: v.id('tours') },
@@ -15,11 +20,37 @@ export const listByTour = query({
         const thumbnailUrl = scene.thumbnailStorageId
           ? await ctx.storage.getUrl(scene.thumbnailStorageId)
           : null
-        return { ...scene, imageUrl, thumbnailUrl }
+        const stagedImageUrl = scene.stagedImageStorageId
+          ? await ctx.storage.getUrl(scene.stagedImageStorageId)
+          : null
+        return { ...scene, imageUrl, thumbnailUrl, stagedImageUrl }
       })
     )
 
     return scenesWithUrls.sort((a, b) => a.order - b.order)
+  },
+})
+
+export const getById = query({
+  args: { sceneId: v.id('scenes') },
+  handler: async (ctx, args) => {
+    const scene = await ctx.db.get(args.sceneId)
+    if (!scene) return null
+
+    const imageUrl = await ctx.storage.getUrl(scene.imageStorageId)
+    const thumbnailUrl = scene.thumbnailStorageId
+      ? await ctx.storage.getUrl(scene.thumbnailStorageId)
+      : null
+    const stagedImageUrl = scene.stagedImageStorageId
+      ? await ctx.storage.getUrl(scene.stagedImageStorageId)
+      : null
+
+    const hotspots = await ctx.db
+      .query('hotspots')
+      .withIndex('by_sceneId', (q) => q.eq('sceneId', args.sceneId))
+      .collect()
+
+    return { ...scene, imageUrl, thumbnailUrl, stagedImageUrl, hotspots }
   },
 })
 
@@ -37,13 +68,36 @@ export const create = mutation({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error('Not authenticated')
 
-    return await ctx.db.insert('scenes', {
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) throw new Error('User not found')
+
+    const sceneId = await ctx.db.insert('scenes', {
       tourId: args.tourId,
       title: args.title,
       imageStorageId: args.imageStorageId,
       order: args.order,
       panoramaType: args.panoramaType ?? 'equirectangular',
     })
+
+    // Log activity
+    await ctx.runMutation(internal.activity.log, {
+      userId: user._id,
+      type: 'scene_uploaded',
+      tourId: args.tourId,
+      message: `Uploaded scene "${args.title}"`,
+    })
+
+    // Auto-trigger AI analysis on upload
+    await ctx.scheduler.runAfter(0, internal.aiActions.analyzeScene, {
+      tourId: args.tourId,
+      sceneId,
+      sceneStorageId: args.imageStorageId,
+    })
+
+    return sceneId
   },
 })
 
@@ -58,6 +112,7 @@ export const update = mutation({
         objects: v.optional(v.array(v.string())),
         features: v.optional(v.array(v.string())),
         qualityScore: v.optional(v.number()),
+        suggestions: v.optional(v.array(v.string())),
       })
     ),
   },
@@ -67,10 +122,70 @@ export const update = mutation({
 
     const { sceneId, ...updates } = args
     const cleanUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined)
+      Object.entries(updates).filter(([, val]) => val !== undefined)
     )
 
     await ctx.db.patch(sceneId, cleanUpdates)
+  },
+})
+
+export const reorder = mutation({
+  args: {
+    scenes: v.array(
+      v.object({
+        sceneId: v.id('scenes'),
+        order: v.number(),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+
+    for (const { sceneId, order } of args.scenes) {
+      await ctx.db.patch(sceneId, { order })
+    }
+  },
+})
+
+export const setCover = mutation({
+  args: {
+    tourId: v.id('tours'),
+    sceneId: v.id('scenes'),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+
+    await ctx.db.patch(args.tourId, { coverSceneId: args.sceneId })
+  },
+})
+
+export const replaceImage = mutation({
+  args: {
+    sceneId: v.id('scenes'),
+    newImageStorageId: v.id('_storage'),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+
+    const scene = await ctx.db.get(args.sceneId)
+    if (!scene) throw new Error('Scene not found')
+
+    // Delete old image from storage
+    await ctx.storage.delete(scene.imageStorageId)
+
+    // Clear staged image if it exists
+    if (scene.stagedImageStorageId) {
+      await ctx.storage.delete(scene.stagedImageStorageId)
+    }
+
+    await ctx.db.patch(args.sceneId, {
+      imageStorageId: args.newImageStorageId,
+      stagedImageStorageId: undefined,
+      aiAnalysis: undefined,
+    })
   },
 })
 
@@ -95,8 +210,36 @@ export const remove = mutation({
       if (scene.thumbnailStorageId) {
         await ctx.storage.delete(scene.thumbnailStorageId)
       }
+      if (scene.stagedImageStorageId) {
+        await ctx.storage.delete(scene.stagedImageStorageId)
+      }
+
+      // If this scene was the cover, clear cover
+      const tour = await ctx.db.get(scene.tourId)
+      if (tour && tour.coverSceneId === args.sceneId) {
+        await ctx.db.patch(scene.tourId, { coverSceneId: undefined })
+      }
     }
 
     await ctx.db.delete(args.sceneId)
+  },
+})
+
+// Internal mutation: update scene with AI analysis results
+export const updateAiAnalysis = internalMutation({
+  args: {
+    sceneId: v.id('scenes'),
+    roomType: v.optional(v.string()),
+    aiAnalysis: v.object({
+      objects: v.optional(v.array(v.string())),
+      features: v.optional(v.array(v.string())),
+      qualityScore: v.optional(v.number()),
+      suggestions: v.optional(v.array(v.string())),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const updates: Record<string, unknown> = { aiAnalysis: args.aiAnalysis }
+    if (args.roomType) updates.roomType = args.roomType
+    await ctx.db.patch(args.sceneId, updates)
   },
 })

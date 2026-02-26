@@ -10,4 +10,11 @@ crons.daily(
   internal.analytics.rollupDaily,
 )
 
+// Monthly AI credit reset on 1st of each month at 0:00 UTC
+crons.monthly(
+  'monthly credit reset',
+  { day: 1, hourUTC: 0, minuteUTC: 0 },
+  internal.users.resetMonthlyCredits,
+)
+
 export default crons

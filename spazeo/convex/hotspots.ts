@@ -11,6 +11,32 @@ export const listByScene = query({
   },
 })
 
+export const listByTour = query({
+  args: { tourId: v.id('tours') },
+  handler: async (ctx, args) => {
+    const scenes = await ctx.db
+      .query('scenes')
+      .withIndex('by_tourId', (q) => q.eq('tourId', args.tourId))
+      .collect()
+
+    const allHotspots = await Promise.all(
+      scenes.map(async (scene) => {
+        const hotspots = await ctx.db
+          .query('hotspots')
+          .withIndex('by_sceneId', (q) => q.eq('sceneId', scene._id))
+          .collect()
+        return hotspots.map((h) => ({
+          ...h,
+          sceneTitle: scene.title,
+          sceneOrder: scene.order,
+        }))
+      })
+    )
+
+    return allHotspots.flat()
+  },
+})
+
 export const create = mutation({
   args: {
     sceneId: v.id('scenes'),
@@ -44,7 +70,7 @@ export const update = mutation({
 
     const { hotspotId, ...updates } = args
     const cleanUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined)
+      Object.entries(updates).filter(([, val]) => val !== undefined)
     )
     await ctx.db.patch(hotspotId, cleanUpdates)
   },
