@@ -31,9 +31,9 @@ const variantClasses: Record<ButtonVariant, string> = {
 }
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: 'h-8 px-3.5 text-xs rounded-lg font-medium',
-  md: 'h-10 px-5 text-sm rounded-xl font-medium',
-  lg: 'h-12 px-7 text-base rounded-xl font-semibold',
+  sm: 'h-8 px-3.5 text-xs rounded-[6px] font-medium',
+  md: 'h-10 px-5 text-sm rounded-[8px] font-medium',
+  lg: 'h-12 px-7 text-base rounded-[8px] font-semibold',
 }
 
 export function Button({

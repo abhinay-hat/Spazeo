@@ -20,7 +20,7 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob: https://clerk.spazeo.io https://*.clerk.accounts.dev https://challenges.cloudflare.com https://js.stripe.com https://us.i.posthog.com",
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-      "img-src 'self' data: blob: https://*.convex.cloud https://img.clerk.com https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://picsum.photos",
+      "img-src 'self' data: blob: https://*.convex.cloud https://img.clerk.com https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://picsum.photos https://images.unsplash.com",
       "font-src 'self' https://fonts.gstatic.com",
       "connect-src 'self' https://*.convex.cloud wss://*.convex.cloud ws://127.0.0.1:3210 ws://localhost:* http://127.0.0.1:3210 http://localhost:* https://clerk.spazeo.io https://*.clerk.accounts.dev https://api.stripe.com https://us.i.posthog.com",
       "frame-src https://challenges.cloudflare.com https://js.stripe.com https://*.clerk.accounts.dev",

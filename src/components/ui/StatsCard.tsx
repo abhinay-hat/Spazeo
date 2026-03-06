@@ -35,7 +35,7 @@ export function StatsCard({ label, value, change, icon, className }: StatsCardPr
             className={cn(
               'rounded-md px-2 py-0.5 text-[11px] font-semibold',
               change >= 0
-                ? 'bg-[rgba(52,211,153,0.13)] text-[#34D399]'
+                ? 'bg-[rgba(45,212,191,0.13)] text-[#2DD4BF]'
                 : 'bg-[rgba(248,113,113,0.13)] text-[#F87171]'
             )}
             style={{ fontFamily: 'var(--font-dmsans)' }}

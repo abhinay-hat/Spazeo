@@ -3,6 +3,7 @@
 import { useState, useEffect, Fragment } from 'react'
 import Link from 'next/link'
 import { Navbar } from '@/components/layout/Navbar'
+import { Footer } from '@/components/layout/Footer'
 import { Check, X, ChevronDown, ArrowRight, Minus } from 'lucide-react'
 import { trackEvent } from '@/lib/posthog'
 
@@ -11,15 +12,15 @@ import { trackEvent } from '@/lib/posthog'
 const PLANS = [
   {
     id: 'free',
-    name: 'Free',
+    name: 'Starter',
     price: { monthly: 0, annual: 0 },
     description: 'Get started with the basics',
     badge: null,
-    accent: '#34D399',
+    accent: '#2DD4BF',
     cardBorder: 'rgba(212,160,23,0.12)',
     cardBg: '#12100E',
     ctaVariant: 'outline-gold' as const,
-    ctaLabel: 'Get Started Free',
+    ctaLabel: 'Explore Free',
     ctaHref: '/sign-up',
     features: [
       '3 virtual tours',
@@ -32,7 +33,7 @@ const PLANS = [
   {
     id: 'pro',
     name: 'Pro',
-    price: { monthly: 29, annual: 23 },
+    price: { monthly: 49, annual: 39 },
     description: 'Everything you need to grow',
     badge: 'Most Popular',
     accent: '#D4A017',
@@ -478,7 +479,7 @@ export default function PricingPage() {
                     >
                       Feature
                     </th>
-                    {['Free', 'Pro', 'Enterprise'].map((name) => (
+                    {['Starter', 'Pro', 'Enterprise'].map((name) => (
                       <th
                         key={name}
                         className="text-center py-4 px-4 text-sm font-semibold"
@@ -562,7 +563,7 @@ export default function PricingPage() {
                           {row.label}
                         </p>
                         <div className="grid grid-cols-3 gap-2 text-center">
-                          {(['Free', 'Pro', 'Enterprise'] as const).map((planName, idx) => {
+                          {(['Starter', 'Pro', 'Enterprise'] as const).map((planName, idx) => {
                             const val = idx === 0 ? row.free : idx === 1 ? row.pro : row.enterprise
                             return (
                               <div key={planName}>
@@ -690,7 +691,7 @@ export default function PricingPage() {
                 letterSpacing: '-1px',
               }}
             >
-              Still have questions?
+              Ready to Get Started?
             </h2>
 
             <p
@@ -701,7 +702,7 @@ export default function PricingPage() {
                 fontFamily: 'var(--font-dmsans)',
               }}
             >
-              Our team is here to help you find the right plan for your business.
+              Join thousands of real estate professionals creating immersive tours with Spazeo.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
@@ -740,6 +741,8 @@ export default function PricingPage() {
             </p>
           </div>
         </section>
+
+        <Footer />
       </main>
     </>
   )

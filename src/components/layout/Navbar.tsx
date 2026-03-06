@@ -10,8 +10,9 @@ import { Logo } from '@/components/ui/Logo'
 import { isProvidersConfigured } from '@/components/providers/ConvexClientProvider'
 
 const NAV_LINKS = [
-  { label: 'Features', href: '/#features' },
-  { label: 'Pricing', href: '/#pricing' },
+  { label: 'Features', href: '/features' },
+  { label: 'Product', href: '/product' },
+  { label: 'Pricing', href: '/pricing' },
   { label: 'About', href: '/about' },
 ]
 
@@ -124,35 +125,36 @@ export function Navbar() {
               }
         }
       >
-        <div className="max-w-7xl mx-auto px-6 lg:px-[60px] h-full flex items-center justify-between">
-          {/* Left — Logo + Nav Links */}
-          <div className="flex items-center gap-10">
+        <div className="max-w-7xl mx-auto px-6 lg:px-[60px] h-full grid grid-cols-3 items-center">
+          {/* Left — Logo */}
+          <div className="flex items-center">
             <Logo href="/" />
-
-            <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
-              {NAV_LINKS.map((link) => {
-                const active = isLinkActive(link.href)
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    onClick={(e) => handleNavClick(e, link.href)}
-                    className={`text-sm font-medium transition-colors duration-200 ${
-                      active
-                        ? 'text-[#D4A017]'
-                        : 'text-[#A8A29E] hover:text-[#F5F3EF]'
-                    }`}
-                    style={{ fontFamily: 'var(--font-dmsans)' }}
-                  >
-                    {link.label}
-                  </Link>
-                )
-              })}
-            </nav>
           </div>
 
+          {/* Center — Nav Links */}
+          <nav className="hidden md:flex items-center justify-center gap-8" aria-label="Main navigation">
+            {NAV_LINKS.map((link) => {
+              const active = isLinkActive(link.href)
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={(e) => handleNavClick(e, link.href)}
+                  className={`text-sm font-medium transition-colors duration-200 ${
+                    active
+                      ? 'text-[#D4A017]'
+                      : 'text-[#A8A29E] hover:text-[#F5F3EF]'
+                  }`}
+                  style={{ fontFamily: 'var(--font-dmsans)' }}
+                >
+                  {link.label}
+                </Link>
+              )
+            })}
+          </nav>
+
           {/* Right — Auth Actions + Mobile Toggle */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-end gap-3">
             {isProvidersConfigured ? (
               <>
                 <SignedOut>
