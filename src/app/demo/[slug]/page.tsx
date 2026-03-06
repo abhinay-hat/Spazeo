@@ -1,4 +1,4 @@
-import { notFound, useParams } from 'next/navigation'
+import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Footer } from '@/components/layout/Footer'
 import {
@@ -121,10 +121,8 @@ export async function generateMetadata({ params }: { params: Promise<Params> }) 
   }
 }
 
-export default function DemoTourPage() {
-  const params = useParams()
-  const slug = params.slug as string
-
+export default async function DemoTourPage({ params }: { params: Promise<Params> }) {
+  const { slug } = await params
   const tour = DEMO_TOURS[slug]
 
   if (!tour) {
