@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { SignedIn, SignedOut, UserButton } from '@clerk/nextjs'
@@ -10,9 +10,8 @@ import { Logo } from '@/components/ui/Logo'
 import { isProvidersConfigured } from '@/components/providers/ConvexClientProvider'
 
 const NAV_LINKS = [
-  { label: 'Product', href: '/product' },
-  { label: 'Features', href: '/features' },
-  { label: 'Pricing', href: '/pricing' },
+  { label: 'Features', href: '/#features' },
+  { label: 'Pricing', href: '/#pricing' },
   { label: 'About', href: '/about' },
 ]
 
@@ -20,6 +19,7 @@ export function Navbar() {
   const pathname = usePathname()
   const [scrolled, setScrolled] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [activeHash, setActiveHash] = useState('')
 
   useEffect(() => {
     const handleScroll = () => {
@@ -29,6 +29,61 @@ export function Navbar() {
     handleScroll()
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  // Track which section is currently in view for hash-based links
+  useEffect(() => {
+    if (pathname !== '/') {
+      setActiveHash('')
+      return
+    }
+    const sectionIds = NAV_LINKS
+      .filter((l) => l.href.startsWith('/#'))
+      .map((l) => l.href.slice(2))
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActiveHash(`#${entry.target.id}`)
+          }
+        }
+      },
+      { rootMargin: '-40% 0px -40% 0px', threshold: 0 }
+    )
+
+    for (const id of sectionIds) {
+      const el = document.getElementById(id)
+      if (el) observer.observe(el)
+    }
+    return () => observer.disconnect()
+  }, [pathname])
+
+  const handleNavClick = useCallback(
+    (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+      if (!href.startsWith('/#')) return
+      const hash = href.slice(1) // e.g. "#features"
+      // If already on landing page, smooth-scroll to anchor
+      if (pathname === '/') {
+        e.preventDefault()
+        const target = document.getElementById(hash.slice(1))
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          setActiveHash(hash)
+          window.history.replaceState(null, '', href)
+        }
+      }
+      // If on another page, the default Link navigation to "/#features" will handle it
+    },
+    [pathname]
+  )
+
+  const isLinkActive = (href: string): boolean => {
+    if (href.startsWith('/#')) {
+      return pathname === '/' && activeHash === href.slice(1)
+    }
+    if (href === '/') return pathname === '/'
+    return pathname.startsWith(href)
+  }
 
   useEffect(() => {
     setMobileOpen(false)
@@ -47,6 +102,14 @@ export function Navbar() {
 
   return (
     <>
+      {/* Skip to content — accessibility */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[60] focus:px-4 focus:py-2 focus:rounded-lg focus:text-sm focus:font-semibold focus:bg-[#D4A017] focus:text-[#0A0908]"
+      >
+        Skip to main content
+      </a>
+
       <header
         className="fixed top-0 w-full z-50 h-16 transition-all duration-300 border-b border-[rgba(212,160,23,0.12)]"
         style={
@@ -68,15 +131,14 @@ export function Navbar() {
 
             <nav className="hidden md:flex items-center gap-8" aria-label="Main navigation">
               {NAV_LINKS.map((link) => {
-                const isActive = link.href.startsWith('/')
-                  && !link.href.includes('#')
-                  && pathname.startsWith(link.href)
+                const active = isLinkActive(link.href)
                 return (
                   <Link
                     key={link.href}
                     href={link.href}
+                    onClick={(e) => handleNavClick(e, link.href)}
                     className={`text-sm font-medium transition-colors duration-200 ${
-                      isActive
+                      active
                         ? 'text-[#D4A017]'
                         : 'text-[#A8A29E] hover:text-[#F5F3EF]'
                     }`}
@@ -205,16 +267,17 @@ export function Navbar() {
 
               <nav className="flex-1 flex flex-col gap-1 p-6" aria-label="Mobile navigation">
                 {NAV_LINKS.map((link) => {
-                  const isActive = link.href.startsWith('/')
-                    && !link.href.includes('#')
-                    && pathname.startsWith(link.href)
+                  const active = isLinkActive(link.href)
                   return (
                     <Link
                       key={link.href}
                       href={link.href}
-                      onClick={() => setMobileOpen(false)}
+                      onClick={(e) => {
+                        handleNavClick(e, link.href)
+                        setMobileOpen(false)
+                      }}
                       className={`text-base font-medium py-3 border-b border-[rgba(212,160,23,0.06)] transition-colors duration-200 ${
-                        isActive
+                        active
                           ? 'text-[#D4A017]'
                           : 'text-[#A8A29E] hover:text-[#F5F3EF]'
                       }`}

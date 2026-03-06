@@ -1,5 +1,5 @@
 import { v } from 'convex/values'
-import { query, mutation, action, internalQuery, internalMutation, internalAction } from './_generated/server'
+import { query, mutation, action, internalQuery, internalAction } from './_generated/server'
 import { internal } from './_generated/api'
 
 export const listByTour = query({
@@ -199,20 +199,28 @@ export const capture = mutation({
         message: `New lead from ${args.name} (${args.email})`,
       })
 
-      // Schedule email notification to tour owner
+      // Create in-app notification for tour owner
+      await ctx.runMutation(internal.notifications.create, {
+        userId: tour.userId,
+        type: 'lead_captured',
+        title: 'New lead captured',
+        message: `${args.name} (${args.email}) expressed interest in "${tour.title}"`,
+        tourId: args.tourId,
+      })
+
+      // Schedule branded email notification to tour owner
       const owner = await ctx.db.get(tour.userId)
       if (owner) {
         const shouldNotify = owner.notificationPreferences?.newLeads !== false
         if (shouldNotify) {
-          await ctx.scheduler.runAfter(0, internal.leads.sendLeadNotification, {
+          await ctx.scheduler.runAfter(0, internal.emails.sendLeadNotification, {
             ownerEmail: owner.email,
             ownerName: owner.name,
             leadName: args.name,
             leadEmail: args.email,
+            tourTitle: tour.title,
             leadPhone: args.phone,
             leadMessage: args.message,
-            tourTitle: tour.title,
-            tourSlug: tour.slug,
           })
         }
       }

@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Navbar } from '@/components/layout/Navbar'
+import { Footer } from '@/components/layout/Footer'
 import {
   ArrowRight,
   Check,
@@ -17,10 +18,12 @@ import {
   Terminal,
   Upload,
   Headphones,
-  Twitter,
-  Linkedin,
-  Instagram,
-  Youtube,
+  Sparkles,
+  ScanSearch,
+  FileText,
+  Share2,
+  BarChart3,
+  Building,
   type LucideIcon,
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
@@ -90,50 +93,6 @@ const COMPARISON_ROWS: { feature: string; spazeo: CellValue; compA: CellValue; c
   { feature: 'Custom Branding', spazeo: 'gold-check', compA: 'red-x', compB: 'red-x' },
 ]
 
-const FOOTER_COLUMNS = [
-  {
-    heading: 'Product',
-    links: [
-      { label: 'Features', href: '/features' },
-      { label: 'Pricing', href: '/#pricing' },
-      { label: 'Integrations', href: '/product#integrations' },
-      { label: 'Changelog', href: '/changelog' },
-    ],
-  },
-  {
-    heading: 'Company',
-    links: [
-      { label: 'About', href: '/about' },
-      { label: 'Blog', href: '/blog' },
-      { label: 'Careers', href: '/careers' },
-      { label: 'Contact', href: '/contact' },
-    ],
-  },
-  {
-    heading: 'Resources',
-    links: [
-      { label: 'Documentation', href: '/docs' },
-      { label: 'Help Center', href: '/help' },
-      { label: 'API Reference', href: '/api-reference' },
-      { label: 'Community', href: '/community' },
-    ],
-  },
-  {
-    heading: 'Legal',
-    links: [
-      { label: 'Privacy Policy', href: '/privacy' },
-      { label: 'Terms of Service', href: '/terms' },
-      { label: 'Cookie Policy', href: '/cookies' },
-    ],
-  },
-]
-
-const SOCIAL_LINKS = [
-  { label: 'Twitter', icon: Twitter, href: 'https://x.com/spazeo' },
-  { label: 'LinkedIn', icon: Linkedin, href: 'https://linkedin.com/company/spazeo' },
-  { label: 'Instagram', icon: Instagram, href: 'https://instagram.com/spazeo' },
-  { label: 'YouTube', icon: Youtube, href: 'https://youtube.com/@spazeo' },
-]
 
 /* ═══════════════════════════════════════════════════════════════════
    HELPERS
@@ -345,6 +304,215 @@ export default function FeaturesPage() {
           </div>
         </section>
 
+        {/* ─── SECTION 3.5: AI FEATURE CATEGORIES ─────────────────────── */}
+        <section
+          className="relative"
+          style={{ background: '#12100E', paddingTop: 80, paddingBottom: 80 }}
+        >
+          <div className="max-w-7xl mx-auto px-6 lg:px-[60px]">
+            <h2
+              className="text-center font-extrabold tracking-tight mb-4 animate-on-scroll"
+              style={{
+                fontSize: 'clamp(28px, 4vw, 40px)',
+                color: '#F5F3EF',
+                fontFamily: 'var(--font-display)',
+              }}
+            >
+              AI-Powered Feature Categories
+            </h2>
+            <p
+              className="text-center text-base mb-14 max-w-[560px] mx-auto animate-on-scroll"
+              style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
+            >
+              Explore each AI capability in depth. Click any card to learn more.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+              {[
+                { icon: Sparkles, title: '360\u00B0 Tour Creation', desc: 'Upload panoramas, arrange scenes, add hotspots, and publish immersive tours in minutes.', href: '/features', color: '#D4A017' },
+                { icon: ScanSearch, title: 'AI-Powered Enhancements', desc: 'Virtual staging, scene analysis, and AI descriptions that transform your tours.', href: '/features/ai-staging', color: '#2DD4BF' },
+                { icon: Share2, title: 'Sharing & Embedding', desc: 'One-click publish, embed codes, custom domains, and social sharing tools.', href: '/features', color: '#FB7A54' },
+                { icon: BarChart3, title: 'Analytics & Insights', desc: 'Visitor tracking, heatmaps, engagement funnels, and exportable reports.', href: '/features', color: '#60A5FA' },
+              ].map((cat, i) => {
+                const Icon = cat.icon
+                return (
+                  <Link
+                    key={cat.title}
+                    href={cat.href}
+                    className="group rounded-2xl p-6 animate-on-scroll transition-all duration-300 hover:-translate-y-1"
+                    style={{
+                      background: '#0A0908',
+                      border: '1px solid rgba(212,160,23,0.12)',
+                      animationDelay: `${i * 80}ms`,
+                    }}
+                  >
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
+                      style={{ background: `${cat.color}15` }}
+                    >
+                      <Icon size={24} style={{ color: cat.color }} />
+                    </div>
+                    <h3
+                      className="text-base font-bold mb-2 group-hover:text-[#D4A017] transition-colors duration-200"
+                      style={{ color: '#F5F3EF', fontFamily: 'var(--font-display)' }}
+                    >
+                      {cat.title}
+                    </h3>
+                    <p
+                      className="text-[13px] leading-relaxed"
+                      style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
+                    >
+                      {cat.desc}
+                    </p>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        </section>
+
+        {/* ─── SECTION 3.6: AI STAGING BEFORE/AFTER ─────────────────────── */}
+        <section
+          className="relative"
+          style={{ background: '#0A0908', paddingTop: 80, paddingBottom: 80 }}
+        >
+          <div className="max-w-7xl mx-auto px-6 lg:px-[60px]">
+            <h2
+              className="text-center font-extrabold tracking-tight mb-4 animate-on-scroll"
+              style={{
+                fontSize: 'clamp(28px, 4vw, 40px)',
+                color: '#F5F3EF',
+                fontFamily: 'var(--font-display)',
+              }}
+            >
+              AI Staging: Before & After
+            </h2>
+            <p
+              className="text-center text-base mb-14 max-w-[560px] mx-auto animate-on-scroll"
+              style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
+            >
+              See how our AI transforms empty rooms into beautifully furnished spaces.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-on-scroll">
+              {/* Before placeholder */}
+              <div
+                className="rounded-2xl overflow-hidden flex flex-col items-center justify-center"
+                style={{
+                  aspectRatio: '16/10',
+                  backgroundColor: '#12100E',
+                  border: '1px solid rgba(212,160,23,0.12)',
+                }}
+              >
+                <p
+                  className="text-sm font-semibold mb-2"
+                  style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
+                >
+                  Before
+                </p>
+                <div
+                  className="w-16 h-16 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: 'rgba(107,101,96,0.15)' }}
+                >
+                  <Building size={32} style={{ color: '#6B6560' }} />
+                </div>
+                <p
+                  className="text-xs mt-3"
+                  style={{ color: '#3D3830', fontFamily: 'var(--font-dmsans)' }}
+                >
+                  Empty room panorama
+                </p>
+              </div>
+
+              {/* After placeholder */}
+              <div
+                className="rounded-2xl overflow-hidden flex flex-col items-center justify-center"
+                style={{
+                  aspectRatio: '16/10',
+                  backgroundColor: '#1B1916',
+                  border: '1px solid rgba(212,160,23,0.2)',
+                }}
+              >
+                <p
+                  className="text-sm font-semibold mb-2"
+                  style={{ color: '#D4A017', fontFamily: 'var(--font-dmsans)' }}
+                >
+                  After AI Staging
+                </p>
+                <div
+                  className="w-16 h-16 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: 'rgba(212,160,23,0.1)' }}
+                >
+                  <Sparkles size={32} style={{ color: '#D4A017' }} />
+                </div>
+                <p
+                  className="text-xs mt-3"
+                  style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
+                >
+                  AI-staged with photorealistic furniture
+                </p>
+              </div>
+            </div>
+
+            <div className="text-center mt-8 animate-on-scroll">
+              <Link
+                href="/features/ai-staging"
+                className="inline-flex items-center gap-2 text-sm font-medium transition-colors duration-200 hover:text-[#D4A017]"
+                style={{ color: '#A8A29E', fontFamily: 'var(--font-dmsans)' }}
+              >
+                Learn more about AI Virtual Staging
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* ─── SECTION 3.7: WHY SPAZEO CALLOUT ──────────────────────────── */}
+        <section
+          className="relative"
+          style={{ background: '#12100E', paddingTop: 60, paddingBottom: 60 }}
+        >
+          <div className="max-w-4xl mx-auto px-6 lg:px-[60px] text-center animate-on-scroll">
+            <div
+              className="rounded-2xl p-10"
+              style={{
+                background: 'linear-gradient(135deg, rgba(212,160,23,0.08) 0%, rgba(45,212,191,0.05) 100%)',
+                border: '1px solid rgba(212,160,23,0.15)',
+              }}
+            >
+              <h3
+                className="font-extrabold tracking-tight mb-3"
+                style={{
+                  fontSize: 'clamp(22px, 3vw, 32px)',
+                  color: '#F5F3EF',
+                  fontFamily: 'var(--font-display)',
+                }}
+              >
+                Why Spazeo?
+              </h3>
+              <p
+                className="text-base mb-6 max-w-[480px] mx-auto"
+                style={{ color: '#A8A29E', fontFamily: 'var(--font-dmsans)' }}
+              >
+                See how Spazeo stacks up against other virtual tour platforms on features,
+                AI capabilities, and pricing.
+              </p>
+              <Link
+                href="/compare"
+                className="inline-flex items-center gap-2 font-semibold text-sm px-6 py-3 rounded-lg transition-all duration-200 hover:shadow-[0_0_20px_rgba(212,160,23,0.25)]"
+                style={{
+                  background: '#D4A017',
+                  color: '#0A0908',
+                  fontFamily: 'var(--font-dmsans)',
+                }}
+              >
+                Compare Spazeo
+                <ArrowRight size={14} />
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* ─── SECTION 4: COMPARISON TABLE ──────────────────────────── */}
         <section
           className="relative"
@@ -499,89 +667,7 @@ export default function FeaturesPage() {
           </div>
         </section>
 
-        {/* ─── FOOTER ───────────────────────────────────────────────── */}
-        <footer
-          aria-label="Site footer"
-          style={{
-            background: '#12100E',
-            borderTop: '1px solid rgba(212,160,23,0.12)',
-          }}
-        >
-          <div className="max-w-7xl mx-auto px-6 lg:px-[60px] pt-[60px] pb-12">
-            <div className="flex flex-col md:flex-row justify-between gap-12">
-              <div className="max-w-[280px]">
-                <Logo href="/" />
-                <p
-                  className="text-sm leading-relaxed mt-4"
-                  style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
-                >
-                  Step Inside Any Space
-                </p>
-              </div>
-
-              <div className="flex gap-16 flex-wrap">
-                {FOOTER_COLUMNS.map((column) => (
-                  <div key={column.heading}>
-                    <h3
-                      className="text-[13px] font-bold mb-4"
-                      style={{ color: '#F5F3EF', fontFamily: 'var(--font-display)' }}
-                    >
-                      {column.heading}
-                    </h3>
-                    <ul className="flex flex-col gap-4">
-                      {column.links.map((link) => (
-                        <li key={link.href}>
-                          <Link
-                            href={link.href}
-                            className="text-[13px] transition-colors duration-200 hover:text-[#A8A29E]"
-                            style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
-                          >
-                            {link.label}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div
-            className="mx-6 lg:mx-[60px] max-w-7xl"
-            style={{ height: 1, background: 'rgba(212,160,23,0.12)' }}
-          />
-
-          <div className="max-w-7xl mx-auto px-6 lg:px-[60px] py-6">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p
-                className="text-xs"
-                style={{ color: '#5A5248', fontFamily: 'var(--font-dmsans)' }}
-              >
-                &copy; {new Date().getFullYear()} Spazeo. All rights reserved.
-              </p>
-
-              <div className="flex items-center gap-4">
-                {SOCIAL_LINKS.map((social) => {
-                  const Icon = social.icon
-                  return (
-                    <a
-                      key={social.label}
-                      href={social.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Spazeo on ${social.label}`}
-                      className="transition-colors duration-200 hover:text-[#D4A017]"
-                      style={{ color: '#6B6560' }}
-                    >
-                      <Icon size={18} />
-                    </a>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </footer>
+        <Footer />
 
       </main>
     </>

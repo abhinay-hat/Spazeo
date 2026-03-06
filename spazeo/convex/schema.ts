@@ -16,12 +16,22 @@ export default defineSchema({
         v.literal('agent'),
         v.literal('photographer'),
         v.literal('developer'),
+        v.literal('manager'),
         v.literal('other')
       )
     ),
+    roleOther: v.optional(v.string()),
     country: v.optional(v.string()),
     phoneNumber: v.optional(v.string()),
     company: v.optional(v.string()),
+    website: v.optional(v.string()),
+    // Onboarding wizard state
+    onboardingStep: v.optional(v.number()),
+    propertyFocus: v.optional(v.array(v.string())),
+    cameraType: v.optional(v.string()),
+    // Login tracking
+    lastLoginAt: v.optional(v.number()),
+    loginCount: v.optional(v.number()),
     // Notification preferences
     notificationPreferences: v.optional(
       v.object({
@@ -34,6 +44,15 @@ export default defineSchema({
     apiKey: v.optional(v.string()),
     // AI usage tracking
     aiCreditsUsed: v.optional(v.number()),
+    // Account lockout (SPA-15)
+    failedLoginAttempts: v.optional(v.number()),
+    lockedUntil: v.optional(v.number()),
+    // Account deletion (SPA-14)
+    deletionRequestedAt: v.optional(v.number()),
+    // City for profile (SPA-14)
+    city: v.optional(v.string()),
+    // Dashboard checklist (SPA-25)
+    checklistDismissed: v.optional(v.boolean()),
   })
     .index('by_clerkId', ['clerkId'])
     .index('by_email', ['email']),
@@ -127,6 +146,7 @@ export default defineSchema({
       })
     ),
     stagedImageStorageId: v.optional(v.id('_storage')),
+    description: v.optional(v.string()),
   }).index('by_tourId', ['tourId']),
 
   hotspots: defineTable({
@@ -141,6 +161,9 @@ export default defineSchema({
     tooltip: v.optional(v.string()),
     icon: v.optional(v.string()),
     content: v.optional(v.string()),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    imageStorageId: v.optional(v.id('_storage')),
   }).index('by_sceneId', ['sceneId']),
 
   floorPlans: defineTable({
@@ -243,9 +266,14 @@ export default defineSchema({
     type: v.union(
       v.literal('tour_created'),
       v.literal('tour_published'),
+      v.literal('tour_archived'),
+      v.literal('tour_deleted'),
+      v.literal('tour_duplicated'),
+      v.literal('tour_updated'),
       v.literal('lead_captured'),
       v.literal('ai_completed'),
       v.literal('scene_uploaded'),
+      v.literal('scene_removed'),
       v.literal('building_created'),
       v.literal('building_published')
     ),
@@ -475,4 +503,129 @@ export default defineSchema({
   })
     .index('by_buildingId', ['buildingId'])
     .index('by_event', ['event']),
+
+  blogPosts: defineTable({
+    title: v.string(),
+    slug: v.string(),
+    content: v.string(),
+    excerpt: v.string(),
+    author: v.string(),
+    category: v.union(
+      v.literal('product_updates'),
+      v.literal('tutorials'),
+      v.literal('industry'),
+      v.literal('case_studies'),
+      v.literal('ai_technology'),
+      v.literal('company_news')
+    ),
+    tags: v.array(v.string()),
+    publishedAt: v.optional(v.number()),
+    featured: v.optional(v.boolean()),
+    featuredImageStorageId: v.optional(v.id('_storage')),
+    seoTitle: v.optional(v.string()),
+    seoDescription: v.optional(v.string()),
+    status: v.union(v.literal('draft'), v.literal('published'), v.literal('archived')),
+  })
+    .index('by_slug', ['slug'])
+    .index('by_category', ['category'])
+    .index('by_status', ['status']),
+
+  // --- SPA-16: Consent Management & GDPR Logging ---
+
+  consents: defineTable({
+    userId: v.id('users'),
+    consentType: v.union(
+      v.literal('tos'),
+      v.literal('privacy'),
+      v.literal('marketing'),
+      v.literal('cookies'),
+      v.literal('dpdp')
+    ),
+    version: v.string(),
+    granted: v.boolean(),
+    timestamp: v.number(),
+    ipAddress: v.optional(v.string()),
+    userAgent: v.optional(v.string()),
+  })
+    .index('by_userId', ['userId'])
+    .index('by_userId_consentType', ['userId', 'consentType']),
+
+  demoTours: defineTable({
+    title: v.string(),
+    slug: v.string(),
+    description: v.string(),
+    propertyType: v.union(
+      v.literal('residential'),
+      v.literal('commercial'),
+      v.literal('luxury'),
+      v.literal('restaurant'),
+      v.literal('student')
+    ),
+    sceneCount: v.number(),
+    aiFeatures: v.array(v.string()),
+    thumbnailStorageId: v.optional(v.id('_storage')),
+    tourId: v.optional(v.id('tours')),
+    featured: v.optional(v.boolean()),
+    order: v.number(),
+  })
+    .index('by_slug', ['slug'])
+    .index('by_propertyType', ['propertyType']),
+
+  pricingPlans: defineTable({
+    name: v.string(),
+    slug: v.string(),
+    priceUsd: v.number(),
+    priceInr: v.number(),
+    interval: v.union(v.literal('monthly'), v.literal('yearly')),
+    features: v.array(v.string()),
+    limits: v.object({
+      tours: v.number(),
+      scenes: v.number(),
+      aiCredits: v.number(),
+      storage: v.number(),
+    }),
+    popular: v.optional(v.boolean()),
+    ctaText: v.string(),
+    stripePriceId: v.optional(v.string()),
+    order: v.number(),
+  })
+    .index('by_slug', ['slug']),
+
+  newsletterSubscriptions: defineTable({
+    email: v.string(),
+    subscribedAt: v.number(),
+    confirmed: v.boolean(),
+    source: v.optional(v.string()),
+    unsubscribedAt: v.optional(v.number()),
+  })
+    .index('by_email', ['email']),
+
+  notifications: defineTable({
+    userId: v.id('users'),
+    type: v.union(
+      v.literal('lead_captured'),
+      v.literal('tour_milestone'),
+      v.literal('ai_completed'),
+      v.literal('tour_error'),
+      v.literal('weekly_summary')
+    ),
+    title: v.string(),
+    message: v.string(),
+    tourId: v.optional(v.id('tours')),
+    read: v.boolean(),
+    createdAt: v.number(),
+  })
+    .index('by_userId', ['userId'])
+    .index('by_read', ['read']),
+
+  contactSubmissions: defineTable({
+    name: v.string(),
+    email: v.string(),
+    company: v.optional(v.string()),
+    teamSize: v.optional(v.string()),
+    message: v.string(),
+    page: v.optional(v.string()),
+    createdAt: v.number(),
+  })
+    .index('by_email', ['email']),
 })

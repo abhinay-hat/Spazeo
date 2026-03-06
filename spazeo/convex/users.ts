@@ -1,5 +1,6 @@
 import { v } from 'convex/values'
-import { query, mutation, internalMutation, internalQuery } from './_generated/server'
+import { query, mutation, action, internalMutation, internalQuery } from './_generated/server'
+import { internal } from './_generated/api'
 
 export const getByClerkIdInternal = internalQuery({
   args: { clerkId: v.string() },
@@ -69,16 +70,52 @@ export const upsertFromClerk = internalMutation({
   },
 })
 
+// Idempotent user creation — called on first Convex query after signup
+export const ensureUser = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+
+    const existing = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+
+    if (existing) return existing
+
+    const userId = await ctx.db.insert('users', {
+      clerkId: identity.subject,
+      email: identity.email ?? '',
+      name: identity.name ?? 'User',
+      avatarUrl: identity.pictureUrl ?? undefined,
+      plan: 'free',
+      role: 'owner',
+      onboardingComplete: false,
+      onboardingStep: 0,
+      aiCreditsUsed: 0,
+      loginCount: 0,
+    })
+
+    return await ctx.db.get(userId)
+  },
+})
+
 export const completeOnboarding = mutation({
   args: {
     userType: v.union(
       v.literal('agent'),
       v.literal('photographer'),
       v.literal('developer'),
+      v.literal('manager'),
       v.literal('other')
     ),
-    country: v.optional(v.string()),
+    roleOther: v.optional(v.string()),
+    propertyFocus: v.optional(v.array(v.string())),
+    cameraType: v.optional(v.string()),
     company: v.optional(v.string()),
+    website: v.optional(v.string()),
+    country: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -92,9 +129,14 @@ export const completeOnboarding = mutation({
 
     await ctx.db.patch(user._id, {
       userType: args.userType,
-      country: args.country,
+      roleOther: args.roleOther,
+      propertyFocus: args.propertyFocus ?? [],
+      cameraType: args.cameraType,
       company: args.company,
+      website: args.website,
+      country: args.country,
       onboardingComplete: true,
+      onboardingStep: 3,
       notificationPreferences: {
         newLeads: true,
         weeklyDigest: true,
@@ -104,12 +146,67 @@ export const completeOnboarding = mutation({
   },
 })
 
+// Save individual onboarding step data for persistence
+export const saveOnboardingStep = mutation({
+  args: {
+    step: v.number(),
+    userType: v.optional(
+      v.union(
+        v.literal('agent'),
+        v.literal('photographer'),
+        v.literal('developer'),
+        v.literal('manager'),
+        v.literal('other')
+      )
+    ),
+    roleOther: v.optional(v.string()),
+    propertyFocus: v.optional(v.array(v.string())),
+    cameraType: v.optional(v.string()),
+    company: v.optional(v.string()),
+    website: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) throw new Error('User not found')
+
+    const updates: Record<string, unknown> = { onboardingStep: args.step }
+    if (args.userType !== undefined) updates.userType = args.userType
+    if (args.roleOther !== undefined) updates.roleOther = args.roleOther
+    if (args.propertyFocus !== undefined) updates.propertyFocus = args.propertyFocus
+    if (args.cameraType !== undefined) updates.cameraType = args.cameraType
+    if (args.company !== undefined) updates.company = args.company
+    if (args.website !== undefined) updates.website = args.website
+
+    await ctx.db.patch(user._id, updates)
+  },
+})
+
 export const updateProfile = mutation({
   args: {
     name: v.optional(v.string()),
     phoneNumber: v.optional(v.string()),
     company: v.optional(v.string()),
+    website: v.optional(v.string()),
     country: v.optional(v.string()),
+    city: v.optional(v.string()),
+    cameraType: v.optional(v.string()),
+    userType: v.optional(
+      v.union(
+        v.literal('agent'),
+        v.literal('photographer'),
+        v.literal('developer'),
+        v.literal('manager'),
+        v.literal('other')
+      )
+    ),
+    roleOther: v.optional(v.string()),
+    propertyFocus: v.optional(v.array(v.string())),
     onboardingComplete: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -126,7 +223,13 @@ export const updateProfile = mutation({
     if (args.name !== undefined) updates.name = args.name
     if (args.phoneNumber !== undefined) updates.phoneNumber = args.phoneNumber
     if (args.company !== undefined) updates.company = args.company
+    if (args.website !== undefined) updates.website = args.website
     if (args.country !== undefined) updates.country = args.country
+    if (args.city !== undefined) updates.city = args.city
+    if (args.cameraType !== undefined) updates.cameraType = args.cameraType
+    if (args.userType !== undefined) updates.userType = args.userType
+    if (args.roleOther !== undefined) updates.roleOther = args.roleOther
+    if (args.propertyFocus !== undefined) updates.propertyFocus = args.propertyFocus
     if (args.onboardingComplete !== undefined) updates.onboardingComplete = args.onboardingComplete
 
     await ctx.db.patch(user._id, updates)
@@ -200,6 +303,206 @@ export const revokeApiKey = mutation({
     if (!user) throw new Error('User not found')
 
     await ctx.db.patch(user._id, { apiKey: undefined })
+  },
+})
+
+// SPA-14: Request account deletion with 30-day grace period
+export const requestDeletion = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) throw new Error('User not found')
+
+    await ctx.db.patch(user._id, {
+      deletionRequestedAt: Date.now(),
+    })
+  },
+})
+
+// SPA-15: Reactivate account (cancel deletion request)
+export const reactivateAccount = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) throw new Error('User not found')
+
+    await ctx.db.patch(user._id, {
+      deletionRequestedAt: undefined,
+    })
+  },
+})
+
+// SPA-14: Internal query to collect all user data for export
+export const getAllUserDataInternal = internalQuery({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .unique()
+    if (!user) return null
+
+    const tours = await ctx.db
+      .query('tours')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .collect()
+
+    const allScenes = []
+    const allLeads = []
+    const allAnalytics = []
+    for (const tour of tours) {
+      const scenes = await ctx.db
+        .query('scenes')
+        .withIndex('by_tourId', (q) => q.eq('tourId', tour._id))
+        .collect()
+      allScenes.push(...scenes)
+
+      const leads = await ctx.db
+        .query('leads')
+        .withIndex('by_tourId', (q) => q.eq('tourId', tour._id))
+        .collect()
+      allLeads.push(...leads)
+
+      const analytics = await ctx.db
+        .query('analytics')
+        .withIndex('by_tourId', (q) => q.eq('tourId', tour._id))
+        .collect()
+      allAnalytics.push(...analytics)
+    }
+
+    const consents = await ctx.db
+      .query('consents')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .collect()
+
+    return {
+      user: {
+        name: user.name,
+        email: user.email,
+        plan: user.plan,
+        role: user.role,
+        company: user.company,
+        website: user.website,
+        country: user.country,
+        city: user.city,
+        userType: user.userType,
+        propertyFocus: user.propertyFocus,
+        cameraType: user.cameraType,
+        onboardingComplete: user.onboardingComplete,
+        createdAt: user._creationTime,
+      },
+      tours: tours.map((t) => ({
+        title: t.title,
+        slug: t.slug,
+        status: t.status,
+        viewCount: t.viewCount,
+        description: t.description,
+        address: t.address,
+        tourType: t.tourType,
+        createdAt: t._creationTime,
+      })),
+      scenes: allScenes.map((s) => ({
+        tourId: s.tourId,
+        title: s.title,
+        order: s.order,
+        panoramaType: s.panoramaType,
+        roomType: s.roomType,
+      })),
+      leads: allLeads.map((l) => ({
+        tourId: l.tourId,
+        name: l.name,
+        email: l.email,
+        phone: l.phone,
+        message: l.message,
+        status: l.status,
+        createdAt: l._creationTime,
+      })),
+      analytics: allAnalytics.map((a) => ({
+        tourId: a.tourId,
+        event: a.event,
+        sessionId: a.sessionId,
+        timestamp: a.timestamp,
+        deviceType: a.deviceType,
+        country: a.country,
+      })),
+      consents: consents.map((c) => ({
+        consentType: c.consentType,
+        version: c.version,
+        granted: c.granted,
+        timestamp: c.timestamp,
+      })),
+    }
+  },
+})
+
+// SPA-14: Export all user data as JSON (action because it returns large data)
+export const exportData = action({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx): Promise<string> => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+
+    const data: unknown = await ctx.runQuery(internal.users.getAllUserDataInternal, {
+      clerkId: identity.subject,
+    })
+
+    if (!data) throw new Error('User not found')
+
+    return JSON.stringify(data, null, 2)
+  },
+})
+
+// SPA-15: Record failed login attempt
+export const recordFailedLogin = internalMutation({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .unique()
+    if (!user) return
+
+    const attempts = (user.failedLoginAttempts ?? 0) + 1
+    const updates: Record<string, unknown> = { failedLoginAttempts: attempts }
+
+    // Lock account after 5 failed attempts for 30 minutes
+    if (attempts >= 5) {
+      updates.lockedUntil = Date.now() + 30 * 60 * 1000
+    }
+
+    await ctx.db.patch(user._id, updates)
+  },
+})
+
+// SPA-15: Reset failed login attempts on successful login
+export const resetFailedLogins = internalMutation({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .unique()
+    if (!user) return
+
+    if ((user.failedLoginAttempts ?? 0) > 0 || user.lockedUntil) {
+      await ctx.db.patch(user._id, {
+        failedLoginAttempts: 0,
+        lockedUntil: undefined,
+      })
+    }
   },
 })
 
@@ -323,8 +626,98 @@ export const deleteAccount = mutation({
       await ctx.db.delete(membership._id)
     }
 
+    // Delete consents
+    const consents = await ctx.db
+      .query('consents')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .collect()
+    for (const consent of consents) {
+      await ctx.db.delete(consent._id)
+    }
+
     // Finally delete user
     await ctx.db.delete(user._id)
+  },
+})
+
+// SPA-25: Onboarding checklist progress
+export const getOnboardingProgress = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) return null
+
+    // Step 1: Complete your profile
+    const profileComplete = user.onboardingComplete === true
+
+    // Step 2: Create your first tour
+    const tours = await ctx.db
+      .query('tours')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .collect()
+    const hasFirstTour = tours.length >= 1
+
+    // Step 3: Upload panorama scenes
+    let hasScenes = false
+    let hasAiAnalysis = false
+    let hasPublishedTour = false
+    for (const tour of tours) {
+      const scenes = await ctx.db
+        .query('scenes')
+        .withIndex('by_tourId', (q) => q.eq('tourId', tour._id))
+        .collect()
+      if (scenes.length > 0) hasScenes = true
+      if (scenes.some((s) => s.aiAnalysis !== undefined)) hasAiAnalysis = true
+      if (tour.status === 'published') hasPublishedTour = true
+    }
+
+    // Step 6: Get your first view
+    let hasFirstView = false
+    for (const tour of tours) {
+      const event = await ctx.db
+        .query('analytics')
+        .withIndex('by_tourId', (q) => q.eq('tourId', tour._id))
+        .first()
+      if (event) {
+        hasFirstView = true
+        break
+      }
+    }
+
+    return {
+      checklistDismissed: user.checklistDismissed ?? false,
+      steps: {
+        profileComplete,
+        hasFirstTour,
+        hasScenes,
+        hasAiAnalysis,
+        hasPublishedTour,
+        hasFirstView,
+      },
+    }
+  },
+})
+
+// SPA-25: Dismiss the onboarding checklist
+export const dismissChecklist = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) throw new Error('Not authenticated')
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) throw new Error('User not found')
+
+    await ctx.db.patch(user._id, { checklistDismissed: true })
   },
 })
 
@@ -338,6 +731,23 @@ export const resetMonthlyCredits = internalMutation({
         await ctx.db.patch(user._id, { aiCreditsUsed: 0 })
       }
     }
+  },
+})
+
+// Internal mutation: record login from Clerk session.created webhook
+export const recordLogin = internalMutation({
+  args: { clerkId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', args.clerkId))
+      .unique()
+    if (!user) return
+
+    await ctx.db.patch(user._id, {
+      lastLoginAt: Date.now(),
+      loginCount: (user.loginCount ?? 0) + 1,
+    })
   },
 })
 

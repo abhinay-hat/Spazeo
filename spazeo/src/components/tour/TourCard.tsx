@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
+/* eslint-disable @next/next/no-img-element */
 import { Eye, Images, Calendar } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { cn } from '@/lib/utils'
@@ -40,11 +40,10 @@ export function TourCard({ tour, className }: TourCardProps) {
       {/* Thumbnail */}
       <div className="relative h-[200px] bg-[#2E2A24] flex items-center justify-center">
         {tour.thumbnailUrl ? (
-          <Image
+          <img
             src={tour.thumbnailUrl}
             alt={tour.title}
-            fill
-            className="object-cover"
+            className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
           <span

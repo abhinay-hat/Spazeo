@@ -1,0 +1,1317 @@
+'use client'
+
+import { useState, useCallback, useRef, useMemo, Suspense } from 'react'
+import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
+import dynamic from 'next/dynamic'
+/* eslint-disable @next/next/no-img-element */
+import { useQuery, useMutation, useAction } from 'convex/react'
+import { api } from '../../../../../../convex/_generated/api'
+import type { Id } from '../../../../../../convex/_generated/dataModel'
+import {
+  ArrowLeft,
+  Eye,
+  Globe,
+  Plus,
+  X,
+  Upload,
+  Trash2,
+  GripVertical,
+  Loader2,
+  ImageIcon,
+  CheckCircle2,
+  MousePointer2,
+  Navigation,
+  Info,
+  Play,
+  ExternalLink,
+  Settings,
+  Sparkles,
+  AlertCircle,
+  CheckCircle,
+  Layers,
+  ChevronDown,
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+
+/* ── Lazy-load PanoramaViewer (Three.js — client only) ── */
+const PanoramaViewer = dynamic(
+  () => import('@/components/viewer/PanoramaViewer'),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="flex h-full w-full items-center justify-center"
+        style={{ backgroundColor: '#0A0908' }}
+      >
+        <Loader2 size={32} className="animate-spin" style={{ color: '#D4A017' }} />
+      </div>
+    ),
+  }
+)
+
+/* ── Hotspot type config ── */
+const HOTSPOT_TYPES = [
+  { value: 'navigation' as const, label: 'Navigation', icon: Navigation, color: '#2DD4BF' },
+  { value: 'info' as const, label: 'Info', icon: Info, color: '#D4A017' },
+  { value: 'media' as const, label: 'Media', icon: Play, color: '#FB7A54' },
+  { value: 'link' as const, label: 'Link', icon: ExternalLink, color: '#8B5CF6' },
+]
+
+/* ── Page ── */
+export default function TourEditorPage() {
+  const params = useParams()
+  const router = useRouter()
+  const tourId = params.id as Id<'tours'>
+
+  const tour = useQuery(api.tours.getById, { tourId })
+  const scenes = useQuery(api.scenes.listByTour, { tourId })
+  const hotspotsByTour = useQuery(api.hotspots.listByTour, { tourId })
+  const generateUploadUrl = useMutation(api.tours.generateUploadUrl)
+  const createScene = useMutation(api.scenes.create)
+  const updateScene = useMutation(api.scenes.update)
+  const removeScene = useMutation(api.scenes.remove)
+  const reorderScenes = useMutation(api.scenes.reorder)
+  const updateTour = useMutation(api.tours.update)
+  const updateSlug = useMutation(api.tours.updateSlug)
+  const publishTour = useMutation(api.tours.publish)
+  const createHotspot = useMutation(api.hotspots.create)
+  const updateHotspot = useMutation(api.hotspots.update)
+  const removeHotspot = useMutation(api.hotspots.remove)
+
+  // AI analysis
+  const analyzeScene = useAction(api.aiActions.analyzeScene)
+  const aiJobs = useQuery(api.ai.getJobsByTour, { tourId })
+  const [analyzingSceneIds, setAnalyzingSceneIds] = useState<Set<Id<'scenes'>>>(new Set())
+
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<string[]>([])
+  const [publishing, setPublishing] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [activeSceneId, setActiveSceneId] = useState<Id<'scenes'> | null>(null)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
+  const [titleEditing, setTitleEditing] = useState(false)
+  const [sceneDescription, setSceneDescription] = useState('')
+  const [descriptionSaveTimeoutId, setDescriptionSaveTimeoutId] = useState<NodeJS.Timeout | null>(null)
+
+  // Hotspot creation state
+  const [isPlacingHotspot, setIsPlacingHotspot] = useState(false)
+  const [pendingPosition, setPendingPosition] = useState<{ x: number; y: number; z: number } | null>(null)
+  const [hotspotType, setHotspotType] = useState<'navigation' | 'info' | 'media' | 'link'>('navigation')
+  const [hotspotTooltip, setHotspotTooltip] = useState('')
+  const [hotspotTargetSceneId, setHotspotTargetSceneId] = useState<string>('')
+  const [hotspotContent, setHotspotContent] = useState('')
+
+  // Drag-and-drop reorder state
+  const [dragIndex, setDragIndex] = useState<number | null>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+
+  // Right panel tab state
+  const [rightPanelTab, setRightPanelTab] = useState<'properties' | 'settings'>('properties')
+
+  // Tour settings local state
+  const [tourSettings, setTourSettings] = useState({
+    autoRotate: false,
+    showMiniMap: false,
+    allowFullscreen: true,
+    brandingEnabled: true,
+  })
+  const [tourDescriptionLocal, setTourDescriptionLocal] = useState('')
+  const [customSlug, setCustomSlug] = useState('')
+  const [settingsInitialized, setSettingsInitialized] = useState(false)
+
+  // Preview mode
+  const [previewMode, setPreviewMode] = useState(false)
+
+  // Mobile scene drawer
+  const [mobileSceneDrawerOpen, setMobileSceneDrawerOpen] = useState(false)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Set initial values when tour loads
+  const tourTitle = tour?.title ?? ''
+  const tourDescription = tour?.description ?? ''
+
+  const sceneList = useMemo(() => scenes ?? [], [scenes])
+  const activeScene = useMemo(
+    () => sceneList.find((s) => s._id === activeSceneId) ?? sceneList[0] ?? null,
+    [sceneList, activeSceneId]
+  )
+
+  // Get hotspots for active scene
+  const activeSceneHotspots = useMemo(() => {
+    if (!activeScene || !hotspotsByTour) return []
+    return hotspotsByTour.filter((h) => h.sceneId === activeScene._id)
+  }, [activeScene, hotspotsByTour])
+
+  // Get AI job status for a specific scene
+  const getSceneAIStatus = useCallback(
+    (sceneId: Id<'scenes'>): 'none' | 'pending' | 'processing' | 'completed' | 'failed' => {
+      if (analyzingSceneIds.has(sceneId)) return 'processing'
+      if (!aiJobs) return 'none'
+      const sceneJobs = aiJobs.filter(
+        (j) => j.sceneId === sceneId && j.type === 'scene_analysis'
+      )
+      if (sceneJobs.length === 0) return 'none'
+      // Jobs are ordered desc, so first is most recent
+      return sceneJobs[0].status as 'pending' | 'processing' | 'completed' | 'failed'
+    },
+    [aiJobs, analyzingSceneIds]
+  )
+
+  /* ── Analyze Scene Handler ── */
+  const handleAnalyzeScene = useCallback(
+    async (sceneId: Id<'scenes'>, storageId: Id<'_storage'>) => {
+      setAnalyzingSceneIds((prev) => new Set(prev).add(sceneId))
+      try {
+        await analyzeScene({ tourId, sceneId, sceneStorageId: storageId })
+        toast.success('AI analysis complete')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Analysis failed'
+        toast.error(msg)
+      } finally {
+        setAnalyzingSceneIds((prev) => {
+          const next = new Set(prev)
+          next.delete(sceneId)
+          return next
+        })
+      }
+    },
+    [analyzeScene, tourId]
+  )
+
+  /* ── Upload Handler ── */
+  const handleUpload = useCallback(
+    async (files: FileList | null) => {
+      if (!files || files.length === 0) return
+
+      setUploading(true)
+      const fileArray = Array.from(files)
+      setUploadProgress([])
+
+      try {
+        for (let i = 0; i < fileArray.length; i++) {
+          const file = fileArray[i]
+          const name = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ')
+          setUploadProgress((prev) => [...prev, `Uploading ${name}...`])
+
+          const uploadUrl = await generateUploadUrl()
+          const result = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': file.type },
+            body: file,
+          })
+          const { storageId } = await result.json()
+
+          const currentSceneCount = (scenes?.length ?? 0) + i
+          await createScene({
+            tourId,
+            title: name,
+            imageStorageId: storageId as Id<'_storage'>,
+            order: currentSceneCount,
+          })
+
+          setUploadProgress((prev) =>
+            prev.map((p, idx) => (idx === i ? `${name} uploaded` : p))
+          )
+        }
+        toast.success(`${fileArray.length} scene${fileArray.length > 1 ? 's' : ''} uploaded`)
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Upload failed'
+        toast.error(msg)
+      } finally {
+        setUploading(false)
+        setUploadProgress([])
+        if (fileInputRef.current) fileInputRef.current.value = ''
+      }
+    },
+    [generateUploadUrl, createScene, tourId, scenes?.length]
+  )
+
+  /* ── Delete Scene ── */
+  const handleDeleteScene = useCallback(
+    async (sceneId: Id<'scenes'>) => {
+      try {
+        await removeScene({ sceneId })
+        if (activeSceneId === sceneId) setActiveSceneId(null)
+        toast.success('Scene deleted')
+      } catch {
+        toast.error('Failed to delete scene')
+      }
+    },
+    [removeScene, activeSceneId]
+  )
+
+  /* ── Reorder Scenes ── */
+  const handleReorderScenes = useCallback(
+    async (fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex || !sceneList) return
+
+      const newSceneList = [...sceneList]
+      const [movedScene] = newSceneList.splice(fromIndex, 1)
+      newSceneList.splice(toIndex, 0, movedScene)
+
+      try {
+        const scenes = newSceneList.map((scene, idx) => ({
+          sceneId: scene._id,
+          order: idx,
+        }))
+        await reorderScenes({ scenes })
+        toast.success('Scenes reordered')
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Failed to reorder scenes'
+        toast.error(msg)
+      }
+    },
+    [sceneList, reorderScenes]
+  )
+
+  /* ── Save Tour Details ── */
+  const handleSave = useCallback(async () => {
+    setSaving(true)
+    try {
+      await updateTour({
+        tourId,
+        title: editTitle || undefined,
+        description: editDescription || undefined,
+      })
+      setTitleEditing(false)
+      toast.success('Tour saved')
+    } catch {
+      toast.error('Failed to save')
+    } finally {
+      setSaving(false)
+    }
+  }, [updateTour, tourId, editTitle, editDescription])
+
+  /* ── Publish ── */
+  const handlePublish = useCallback(async () => {
+    setPublishing(true)
+    try {
+      await publishTour({ tourId })
+      toast.success('Tour published!')
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to publish'
+      toast.error(msg)
+    } finally {
+      setPublishing(false)
+    }
+  }, [publishTour, tourId])
+
+  /* ── Rename Scene ── */
+  const handleRenameScene = useCallback(
+    async (sceneId: Id<'scenes'>, newTitle: string) => {
+      try {
+        await updateScene({ sceneId, title: newTitle })
+      } catch {
+        toast.error('Failed to rename scene')
+      }
+    },
+    [updateScene]
+  )
+
+  /* ── Save Scene Description (debounced) ── */
+  const handleSaveDescription = useCallback(
+    async (sceneId: Id<'scenes'>, description: string) => {
+      try {
+        await updateScene({ sceneId, description: description || undefined })
+      } catch {
+        toast.error('Failed to save scene description')
+      }
+    },
+    [updateScene]
+  )
+
+  const handleDescriptionChange = useCallback(
+    (sceneId: Id<'scenes'>, value: string) => {
+      setSceneDescription(value)
+
+      // Clear existing timeout if any
+      if (descriptionSaveTimeoutId) {
+        clearTimeout(descriptionSaveTimeoutId)
+      }
+
+      // Set new timeout for debounced save
+      const timeoutId = setTimeout(() => {
+        handleSaveDescription(sceneId, value)
+      }, 1000) // 1 second debounce
+
+      setDescriptionSaveTimeoutId(timeoutId)
+    },
+    [descriptionSaveTimeoutId, handleSaveDescription]
+  )
+
+  /* ── Sphere Click → place hotspot ── */
+  const handleSphereClick = useCallback(
+    (position: { x: number; y: number; z: number }) => {
+      if (!isPlacingHotspot) return
+      setPendingPosition(position)
+    },
+    [isPlacingHotspot]
+  )
+
+  /* ── Confirm hotspot creation ── */
+  const handleConfirmHotspot = useCallback(async () => {
+    if (!pendingPosition || !activeScene) return
+
+    try {
+      await createHotspot({
+        sceneId: activeScene._id,
+        targetSceneId: hotspotTargetSceneId
+          ? (hotspotTargetSceneId as Id<'scenes'>)
+          : undefined,
+        type: hotspotType,
+        position: pendingPosition,
+        tooltip: hotspotTooltip || undefined,
+        content: hotspotContent || undefined,
+      })
+      toast.success('Hotspot added')
+      setPendingPosition(null)
+      setHotspotTooltip('')
+      setHotspotContent('')
+      setHotspotTargetSceneId('')
+      setIsPlacingHotspot(false)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to add hotspot'
+      toast.error(msg)
+    }
+  }, [
+    createHotspot,
+    activeScene,
+    pendingPosition,
+    hotspotType,
+    hotspotTooltip,
+    hotspotTargetSceneId,
+    hotspotContent,
+  ])
+
+  /* ── Update hotspot tooltip ── */
+  const handleUpdateHotspotTooltip = useCallback(
+    async (hotspotId: Id<'hotspots'>, tooltip: string) => {
+      try {
+        await updateHotspot({ hotspotId, tooltip })
+      } catch {
+        toast.error('Failed to update hotspot')
+      }
+    },
+    [updateHotspot]
+  )
+
+  /* ── Delete hotspot ── */
+  const handleDeleteHotspot = useCallback(
+    async (hotspotId: Id<'hotspots'>) => {
+      try {
+        await removeHotspot({ hotspotId })
+        toast.success('Hotspot removed')
+      } catch {
+        toast.error('Failed to remove hotspot')
+      }
+    },
+    [removeHotspot]
+  )
+
+  /* ── Hotspot click in viewer ── */
+  const handleHotspotClick = useCallback(
+    (hotspot: { _id: string; targetSceneId?: string; type: string }) => {
+      if (previewMode && hotspot.type === 'navigation' && hotspot.targetSceneId) {
+        setActiveSceneId(hotspot.targetSceneId as Id<'scenes'>)
+      }
+    },
+    [previewMode]
+  )
+
+  /* ── Loading ── */
+  if (tour === undefined) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center"
+        style={{ backgroundColor: '#0A0908' }}
+      >
+        <Loader2 size={32} className="animate-spin" style={{ color: '#D4A017' }} />
+      </div>
+    )
+  }
+
+  if (tour === null) {
+    return (
+      <div
+        className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4"
+        style={{ backgroundColor: '#0A0908' }}
+      >
+        <p style={{ color: '#F87171', fontFamily: 'var(--font-dmsans)' }}>Tour not found</p>
+        <Link
+          href="/tours"
+          className="text-sm underline"
+          style={{ color: '#D4A017', fontFamily: 'var(--font-dmsans)' }}
+        >
+          Back to Tours
+        </Link>
+      </div>
+    )
+  }
+
+  const isPublished = tour.status === 'published'
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex flex-col"
+      style={{ backgroundColor: '#0A0908' }}
+    >
+      {/* ── Top Bar ── */}
+      <div
+        className="flex items-center justify-between h-14 px-6 flex-shrink-0"
+        style={{
+          backgroundColor: '#12100E',
+          borderBottom: '1px solid rgba(212,160,23,0.12)',
+        }}
+      >
+        <div className="flex items-center gap-4">
+          <Link
+            href="/tours"
+            className="flex items-center justify-center rounded-md"
+            style={{ padding: '6px 8px', border: '1px solid rgba(212,160,23,0.12)' }}
+            aria-label="Back to tours"
+          >
+            <ArrowLeft size={18} style={{ color: '#A8A29E' }} />
+          </Link>
+          {titleEditing ? (
+            <input
+              type="text"
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              onBlur={() => {
+                if (editTitle.trim() && editTitle !== tourTitle) handleSave()
+                else setTitleEditing(false)
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  if (editTitle.trim() && editTitle !== tourTitle) handleSave()
+                  else setTitleEditing(false)
+                }
+              }}
+              autoFocus
+              className="text-base font-semibold outline-none bg-transparent"
+              style={{
+                color: '#F5F3EF',
+                fontFamily: 'var(--font-display)',
+                borderBottom: '1px solid #D4A017',
+                paddingBottom: 2,
+              }}
+            />
+          ) : (
+            <button
+              onClick={() => {
+                setEditTitle(tourTitle)
+                setEditDescription(tourDescription)
+                setTitleEditing(true)
+              }}
+              className="text-base font-semibold hover:opacity-80 transition-opacity"
+              style={{ color: '#F5F3EF', fontFamily: 'var(--font-display)' }}
+            >
+              {tourTitle}
+            </button>
+          )}
+          {isPublished && (
+            <span
+              className="flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
+              style={{ backgroundColor: 'rgba(52,211,153,0.12)', color: '#34D399' }}
+            >
+              <CheckCircle2 size={12} /> Published
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center gap-3">
+          {/* Preview toggle */}
+          <button
+            onClick={() => {
+              setPreviewMode(!previewMode)
+              setIsPlacingHotspot(false)
+              setPendingPosition(null)
+            }}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors"
+            style={{
+              border: previewMode
+                ? '1px solid #2DD4BF'
+                : '1px solid rgba(212,160,23,0.12)',
+              color: previewMode ? '#2DD4BF' : '#A8A29E',
+              backgroundColor: previewMode ? 'rgba(45,212,191,0.08)' : 'transparent',
+              fontFamily: 'var(--font-dmsans)',
+            }}
+          >
+            <Eye size={16} /> {previewMode ? 'Exit Preview' : 'Preview'}
+          </button>
+
+          {/* Live link */}
+          {tour.slug && isPublished && (
+            <Link
+              href={`/tour/${tour.slug}`}
+              target="_blank"
+              className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-medium transition-colors"
+              style={{
+                border: '1px solid rgba(212,160,23,0.12)',
+                color: '#A8A29E',
+                fontFamily: 'var(--font-dmsans)',
+              }}
+            >
+              <Globe size={16} /> View Live
+            </Link>
+          )}
+          <button
+            onClick={handlePublish}
+            disabled={publishing || sceneList.length === 0}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all disabled:opacity-50"
+            style={{
+              backgroundColor: '#D4A017',
+              color: '#0A0908',
+              fontFamily: 'var(--font-dmsans)',
+            }}
+          >
+            {publishing ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Globe size={16} />
+            )}
+            {isPublished ? 'Republish' : 'Publish'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Editor Body ── */}
+      <div className="flex flex-1 min-h-0">
+        {/* ── Scenes Panel (Left) ── */}
+        {!previewMode && (
+          <div
+            className="hidden md:flex flex-col w-[260px] flex-shrink-0"
+            style={{
+              backgroundColor: '#12100E',
+              borderRight: '1px solid rgba(212,160,23,0.12)',
+            }}
+          >
+            <div className="flex items-center justify-between px-4 py-4">
+              <span
+                className="text-sm font-semibold"
+                style={{ color: '#F5F3EF', fontFamily: 'var(--font-display)' }}
+              >
+                Scenes
+              </span>
+              <span
+                className="text-xs font-medium"
+                style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
+              >
+                {sceneList.length}
+              </span>
+            </div>
+
+            {/* Scene List */}
+            <div className="flex-1 overflow-y-auto px-2 flex flex-col gap-1">
+              {sceneList.length === 0 && !uploading && (
+                <div className="px-3 py-8 text-center">
+                  <ImageIcon size={28} style={{ color: '#6B6560', margin: '0 auto 8px' }} />
+                  <p
+                    className="text-xs"
+                    style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
+                  >
+                    No scenes yet. Upload 360° panoramas to get started.
+                  </p>
+                </div>
+              )}
+
+              {sceneList.map((scene, index) => {
+                const isActive = scene._id === (activeSceneId ?? sceneList[0]?._id)
+                const isDragging = dragIndex === index
+                const isDragOver = dragOverIndex === index
+                const sceneHotspotCount = hotspotsByTour?.filter(
+                  (h) => h.sceneId === scene._id
+                ).length ?? 0
+                const sceneAIStatus = getSceneAIStatus(scene._id)
+
+                return (
+                  <div key={scene._id}>
+                    {/* Drop indicator line above scene */}
+                    {isDragOver && dragIndex !== null && dragIndex !== index && (
+                      <div
+                        style={{
+                          height: '2px',
+                          backgroundColor: '#D4A017',
+                          margin: '0 0 -1px 0',
+                        }}
+                      />
+                    )}
+                    <div
+                      draggable
+                      className="group flex items-center gap-2.5 p-2 rounded-lg transition-all duration-150 cursor-move"
+                      style={{
+                        backgroundColor: isActive ? 'rgba(212,160,23,0.07)' : 'transparent',
+                        border: isActive
+                          ? '1px solid rgba(212,160,23,0.4)'
+                          : '1px solid transparent',
+                        opacity: isDragging ? 0.4 : 1,
+                        transition: 'opacity 150ms',
+                      }}
+                      onDragStart={(e) => {
+                        setDragIndex(index)
+                        e.dataTransfer!.effectAllowed = 'move'
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        e.dataTransfer!.dropEffect = 'move'
+                        setDragOverIndex(index)
+                      }}
+                      onDragLeave={() => {
+                        setDragOverIndex(null)
+                      }}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        if (dragIndex !== null && dragIndex !== index) {
+                          handleReorderScenes(dragIndex, index)
+                        }
+                        setDragIndex(null)
+                        setDragOverIndex(null)
+                      }}
+                      onDragEnd={() => {
+                        setDragIndex(null)
+                        setDragOverIndex(null)
+                      }}
+                      onClick={() => setActiveSceneId(scene._id)}
+                    >
+                    <GripVertical size={14} style={{ color: '#6B6560' }} className="flex-shrink-0" />
+                    <div className="w-[56px] h-10 rounded-md overflow-hidden flex-shrink-0 relative">
+                      {scene.imageUrl ? (
+                        <img
+                          src={scene.imageUrl}
+                          alt={scene.title}
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div
+                          className="w-full h-full flex items-center justify-center"
+                          style={{ backgroundColor: '#1B1916' }}
+                        >
+                          <ImageIcon size={16} style={{ color: '#6B6560' }} />
+                        </div>
+                      )}
+                      {/* AI status overlay on thumbnail */}
+                      {(sceneAIStatus === 'pending' || sceneAIStatus === 'processing') && (
+                        <div className="absolute inset-0 flex items-center justify-center" style={{ backgroundColor: 'rgba(10,9,8,0.6)' }}>
+                          <Loader2 size={14} className="animate-spin" style={{ color: '#D4A017' }} />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className="text-[13px] font-medium truncate"
+                        style={{
+                          color: isActive ? '#F5F3EF' : '#A8A29E',
+                          fontFamily: 'var(--font-dmsans)',
+                        }}
+                      >
+                        {scene.title}
+                      </p>
+                      <p className="text-[11px]" style={{ color: '#6B6560' }}>
+                        Scene {scene.order + 1}
+                        {sceneHotspotCount > 0 && (
+                          <span style={{ color: '#2DD4BF' }}>
+                            {' '}· {sceneHotspotCount} hotspot{sceneHotspotCount > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    {/* AI status badge */}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {sceneAIStatus === 'none' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleAnalyzeScene(scene._id, scene.imageStorageId)
+                          }}
+                          className="p-1 rounded transition-colors hover:bg-[rgba(212,160,23,0.1)]"
+                          style={{ color: '#D4A017' }}
+                          title="Analyze with AI"
+                          aria-label={`Analyze ${scene.title} with AI`}
+                        >
+                          <Sparkles size={13} />
+                        </button>
+                      )}
+                      {(sceneAIStatus === 'pending' || sceneAIStatus === 'processing') && (
+                        <span className="p-1" title="Analyzing...">
+                          <Loader2 size={13} className="animate-spin" style={{ color: '#D4A017' }} />
+                        </span>
+                      )}
+                      {sceneAIStatus === 'completed' && (
+                        <span className="p-1" title="AI analysis complete">
+                          <CheckCircle size={13} style={{ color: '#34D399' }} />
+                        </span>
+                      )}
+                      {sceneAIStatus === 'failed' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleAnalyzeScene(scene._id, scene.imageStorageId)
+                          }}
+                          className="p-1 rounded transition-colors hover:bg-[rgba(248,113,113,0.1)]"
+                          style={{ color: '#F87171' }}
+                          title="Analysis failed — click to retry"
+                          aria-label={`Retry analysis for ${scene.title}`}
+                        >
+                          <AlertCircle size={13} />
+                        </button>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDeleteScene(scene._id)
+                        }}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded"
+                        style={{ color: '#F87171' }}
+                        aria-label={`Delete ${scene.title}`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                    </div>
+                  </div>
+                )
+              })}
+
+              {/* Upload progress */}
+              {uploadProgress.map((msg, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-2 px-3 py-2 text-[12px]"
+                  style={{ color: '#A8A29E', fontFamily: 'var(--font-dmsans)' }}
+                >
+                  <Loader2 size={12} className="animate-spin" style={{ color: '#D4A017' }} />
+                  {msg}
+                </div>
+              ))}
+            </div>
+
+            {/* Add Scene Button */}
+            <div style={{ borderTop: '1px solid rgba(212,160,23,0.12)' }}>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => handleUpload(e.target.files)}
+                className="hidden"
+                id="scene-upload"
+              />
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center justify-center gap-2 w-full px-4 py-3 transition-colors disabled:opacity-50"
+                style={{ color: '#D4A017', fontFamily: 'var(--font-dmsans)' }}
+              >
+                {uploading ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Plus size={16} />
+                )}
+                <span className="text-[13px] font-semibold">
+                  {uploading ? 'Uploading...' : 'Add Scenes'}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Viewport (Center) — 360° PanoramaViewer ── */}
+        <div
+          className="flex-1 relative overflow-hidden flex items-center justify-center"
+          style={{ backgroundColor: '#0A0908' }}
+        >
+          {activeScene?.imageUrl ? (
+            <PanoramaViewer
+              imageUrl={activeScene.imageUrl}
+              height="100%"
+              hotspots={activeSceneHotspots as any[]}
+              onHotspotClick={handleHotspotClick as any}
+              onSphereClick={handleSphereClick}
+              isEditing={isPlacingHotspot}
+              autoRotate={previewMode}
+            />
+          ) : (
+            /* Empty state — big upload area */
+            <div
+              className="flex flex-col items-center justify-center gap-6 p-8 rounded-2xl max-w-lg w-full mx-4"
+              style={{
+                backgroundColor: '#12100E',
+                border: '2px dashed rgba(212,160,23,0.25)',
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.currentTarget.style.borderColor = '#D4A017'
+              }}
+              onDragLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(212,160,23,0.25)'
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                e.currentTarget.style.borderColor = 'rgba(212,160,23,0.25)'
+                handleUpload(e.dataTransfer.files)
+              }}
+            >
+              <div
+                className="h-16 w-16 rounded-2xl flex items-center justify-center"
+                style={{ backgroundColor: 'rgba(212,160,23,0.1)' }}
+              >
+                <Upload size={28} style={{ color: '#D4A017' }} />
+              </div>
+              <div className="text-center">
+                <h3
+                  className="text-lg font-semibold mb-2"
+                  style={{ color: '#F5F3EF', fontFamily: 'var(--font-display)' }}
+                >
+                  Upload 360° Panoramas
+                </h3>
+                <p
+                  className="text-sm mb-1"
+                  style={{ color: '#A8A29E', fontFamily: 'var(--font-dmsans)' }}
+                >
+                  Drag and drop your panorama images here, or click to browse.
+                </p>
+                <p
+                  className="text-xs"
+                  style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
+                >
+                  Supports JPG, PNG, WebP. Equirectangular format recommended.
+                </p>
+              </div>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all disabled:opacity-50"
+                style={{
+                  backgroundColor: '#D4A017',
+                  color: '#0A0908',
+                  fontFamily: 'var(--font-dmsans)',
+                }}
+              >
+                {uploading ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Upload size={18} />
+                )}
+                {uploading ? 'Uploading...' : 'Select Files'}
+              </button>
+            </div>
+          )}
+
+          {/* Scene info overlay */}
+          {activeScene && !previewMode && (
+            <div
+              className="absolute bottom-4 left-4 px-4 py-2 rounded-lg"
+              style={{
+                backgroundColor: 'rgba(10,9,8,0.8)',
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(212,160,23,0.12)',
+              }}
+            >
+              <p
+                className="text-sm font-semibold"
+                style={{ color: '#F5F3EF', fontFamily: 'var(--font-dmsans)' }}
+              >
+                {activeScene.title}
+              </p>
+              {activeScene.roomType && (
+                <p className="text-xs" style={{ color: '#A8A29E' }}>
+                  {activeScene.roomType}
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Hotspot placement dialog */}
+          {pendingPosition && (
+            <div
+              className="absolute top-4 right-4 w-[280px] rounded-xl p-4 flex flex-col gap-3 z-20"
+              style={{
+                backgroundColor: '#12100E',
+                border: '1px solid rgba(212,160,23,0.2)',
+                boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+              }}
+            >
+              <div className="flex items-center justify-between">
+                <h4
+                  className="text-sm font-semibold"
+                  style={{ color: '#F5F3EF', fontFamily: 'var(--font-display)' }}
+                >
+                  New Hotspot
+                </h4>
+                <button
+                  onClick={() => { setPendingPosition(null); setIsPlacingHotspot(false) }}
+                  style={{ color: '#6B6560' }}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              {/* Type selector */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium" style={{ color: '#A8A29E' }}>
+                  Type
+                </label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {HOTSPOT_TYPES.map((ht) => {
+                    const Icon = ht.icon
+                    const isSelected = hotspotType === ht.value
+                    return (
+                      <button
+                        key={ht.value}
+                        onClick={() => setHotspotType(ht.value)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-all"
+                        style={{
+                          backgroundColor: isSelected ? `${ht.color}15` : 'transparent',
+                          border: isSelected
+                            ? `1px solid ${ht.color}40`
+                            : '1px solid rgba(212,160,23,0.12)',
+                          color: isSelected ? ht.color : '#A8A29E',
+                        }}
+                      >
+                        <Icon size={13} /> {ht.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Tooltip */}
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-medium" style={{ color: '#A8A29E' }}>
+                  Tooltip
+                </label>
+                <input
+                  type="text"
+                  value={hotspotTooltip}
+                  onChange={(e) => setHotspotTooltip(e.target.value)}
+                  placeholder="e.g. Go to Kitchen"
+                  className="w-full h-8 px-3 rounded-lg text-[12px] outline-none"
+                  style={{
+                    backgroundColor: '#0A0908',
+                    border: '1px solid rgba(212,160,23,0.12)',
+                    color: '#F5F3EF',
+                    fontFamily: 'var(--font-dmsans)',
+                  }}
+                />
+              </div>
+
+              {/* Target scene (for navigation type) */}
+              {hotspotType === 'navigation' && sceneList.length > 1 && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium" style={{ color: '#A8A29E' }}>
+                    Navigate to
+                  </label>
+                  <select
+                    value={hotspotTargetSceneId}
+                    onChange={(e) => setHotspotTargetSceneId(e.target.value)}
+                    className="w-full h-8 px-3 rounded-lg text-[12px] outline-none"
+                    style={{
+                      backgroundColor: '#0A0908',
+                      border: '1px solid rgba(212,160,23,0.12)',
+                      color: '#F5F3EF',
+                      fontFamily: 'var(--font-dmsans)',
+                    }}
+                  >
+                    <option value="">Select a scene...</option>
+                    {sceneList
+                      .filter((s) => s._id !== activeScene?._id)
+                      .map((s) => (
+                        <option key={s._id} value={s._id}>
+                          {s.title}
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Content (for info/link type) */}
+              {(hotspotType === 'info' || hotspotType === 'link') && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium" style={{ color: '#A8A29E' }}>
+                    {hotspotType === 'link' ? 'URL' : 'Content'}
+                  </label>
+                  <input
+                    type="text"
+                    value={hotspotContent}
+                    onChange={(e) => setHotspotContent(e.target.value)}
+                    placeholder={hotspotType === 'link' ? 'https://...' : 'Description text'}
+                    className="w-full h-8 px-3 rounded-lg text-[12px] outline-none"
+                    style={{
+                      backgroundColor: '#0A0908',
+                      border: '1px solid rgba(212,160,23,0.12)',
+                      color: '#F5F3EF',
+                      fontFamily: 'var(--font-dmsans)',
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* Confirm button */}
+              <button
+                onClick={handleConfirmHotspot}
+                className="w-full h-9 rounded-lg text-[13px] font-semibold transition-all"
+                style={{
+                  backgroundColor: '#2DD4BF',
+                  color: '#0A0908',
+                  fontFamily: 'var(--font-dmsans)',
+                }}
+              >
+                Add Hotspot
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Properties Panel (Right) ── */}
+        {activeScene && !previewMode && (
+          <div
+            className="hidden lg:flex flex-col w-[280px] flex-shrink-0"
+            style={{
+              backgroundColor: '#12100E',
+              borderLeft: '1px solid rgba(212,160,23,0.12)',
+            }}
+          >
+            <div className="flex items-center justify-between px-4 py-4">
+              <span
+                className="text-sm font-semibold"
+                style={{ color: '#F5F3EF', fontFamily: 'var(--font-display)' }}
+              >
+                Properties
+              </span>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-4 flex flex-col gap-5">
+              {/* Scene Name */}
+              <div className="flex flex-col gap-2">
+                <label
+                  className="text-xs font-medium"
+                  style={{ color: '#A8A29E', fontFamily: 'var(--font-dmsans)' }}
+                >
+                  Scene Name
+                </label>
+                <input
+                  type="text"
+                  defaultValue={activeScene.title}
+                  key={activeScene._id}
+                  onBlur={(e) => {
+                    const val = e.target.value.trim()
+                    if (val && val !== activeScene.title) {
+                      handleRenameScene(activeScene._id, val)
+                    }
+                  }}
+                  className="w-full h-9 px-3 rounded-lg text-[13px] outline-none transition-colors"
+                  style={{
+                    backgroundColor: '#0A0908',
+                    border: '1px solid rgba(212,160,23,0.12)',
+                    color: '#F5F3EF',
+                    fontFamily: 'var(--font-dmsans)',
+                  }}
+                  onFocus={(e) => { e.currentTarget.style.borderColor = '#D4A017' }}
+                  onBlurCapture={(e) => { e.currentTarget.style.borderColor = 'rgba(212,160,23,0.12)' }}
+                />
+              </div>
+
+              {/* Room Type */}
+              {activeScene.roomType && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium" style={{ color: '#A8A29E' }}>
+                    Room Type (AI)
+                  </span>
+                  <span
+                    className="text-[13px] px-2 py-1 rounded-md inline-block w-fit"
+                    style={{
+                      backgroundColor: 'rgba(212,160,23,0.08)',
+                      color: '#D4A017',
+                      fontFamily: 'var(--font-dmsans)',
+                    }}
+                  >
+                    {activeScene.roomType}
+                  </span>
+                </div>
+              )}
+
+              {/* Hotspots section */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium" style={{ color: '#A8A29E' }}>
+                    Hotspots ({activeSceneHotspots.length})
+                  </span>
+                  <button
+                    onClick={() => {
+                      setIsPlacingHotspot(!isPlacingHotspot)
+                      setPendingPosition(null)
+                    }}
+                    className="flex items-center gap-1 text-[11px] font-medium px-2 py-1 rounded-md transition-all"
+                    style={{
+                      backgroundColor: isPlacingHotspot
+                        ? 'rgba(45,212,191,0.15)'
+                        : 'rgba(212,160,23,0.08)',
+                      color: isPlacingHotspot ? '#2DD4BF' : '#D4A017',
+                      border: isPlacingHotspot
+                        ? '1px solid rgba(45,212,191,0.3)'
+                        : '1px solid transparent',
+                    }}
+                  >
+                    {isPlacingHotspot ? (
+                      <>
+                        <X size={11} /> Cancel
+                      </>
+                    ) : (
+                      <>
+                        <MousePointer2 size={11} /> Add
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Hotspot list */}
+                {activeSceneHotspots.length === 0 && (
+                  <p
+                    className="text-[11px] py-2"
+                    style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
+                  >
+                    No hotspots on this scene. Click &quot;Add&quot; then click on the panorama to place one.
+                  </p>
+                )}
+
+                {activeSceneHotspots.map((hotspot) => {
+                  const config = HOTSPOT_TYPES.find((ht) => ht.value === hotspot.type) ?? HOTSPOT_TYPES[0]
+                  const Icon = config.icon
+                  return (
+                    <div
+                      key={hotspot._id}
+                      className="flex items-center gap-2 p-2 rounded-lg group"
+                      style={{
+                        backgroundColor: 'rgba(255,255,255,0.02)',
+                        border: '1px solid rgba(212,160,23,0.08)',
+                      }}
+                    >
+                      <div
+                        className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
+                        style={{ backgroundColor: `${config.color}15`, color: config.color }}
+                      >
+                        <Icon size={14} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <input
+                          type="text"
+                          defaultValue={hotspot.tooltip || ''}
+                          key={hotspot._id}
+                          placeholder={config.label}
+                          onBlur={(e) => {
+                            const val = e.target.value.trim()
+                            if (val !== (hotspot.tooltip ?? '')) {
+                              handleUpdateHotspotTooltip(hotspot._id as Id<'hotspots'>, val)
+                            }
+                          }}
+                          className="w-full text-[12px] font-medium truncate bg-transparent outline-none"
+                          style={{ color: '#F5F3EF' }}
+                        />
+                        <p className="text-[10px] capitalize" style={{ color: '#6B6560' }}>
+                          {hotspot.type}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteHotspot(hotspot._id as Id<'hotspots'>)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded"
+                        style={{ color: '#F87171' }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {/* AI Analysis */}
+              {activeScene.aiAnalysis && (
+                <div className="flex flex-col gap-2">
+                  <span className="text-xs font-medium" style={{ color: '#A8A29E' }}>
+                    AI Analysis
+                  </span>
+                  {activeScene.aiAnalysis.qualityScore !== undefined && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[12px]" style={{ color: '#6B6560' }}>Quality</span>
+                      <span
+                        className="text-[13px] font-medium"
+                        style={{
+                          color: activeScene.aiAnalysis.qualityScore >= 70 ? '#34D399' : '#FBBF24',
+                        }}
+                      >
+                        {activeScene.aiAnalysis.qualityScore}/100
+                      </span>
+                    </div>
+                  )}
+                  {activeScene.aiAnalysis.objects && activeScene.aiAnalysis.objects.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {activeScene.aiAnalysis.objects.slice(0, 8).map((obj: string) => (
+                        <span
+                          key={obj}
+                          className="text-[11px] px-2 py-0.5 rounded-full"
+                          style={{
+                            backgroundColor: 'rgba(45,212,191,0.08)',
+                            color: '#2DD4BF',
+                          }}
+                        >
+                          {obj}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div
+              className="p-4 flex flex-col gap-2"
+              style={{ borderTop: '1px solid rgba(212,160,23,0.12)' }}
+            >
+              <button
+                onClick={handlePublish}
+                disabled={publishing || sceneList.length === 0}
+                className="w-full h-10 rounded-[10px] flex items-center justify-center gap-2 text-[13px] font-bold transition-all disabled:opacity-50"
+                style={{
+                  backgroundColor: '#D4A017',
+                  color: '#0A0908',
+                  fontFamily: 'var(--font-dmsans)',
+                  boxShadow: '0 0 20px rgba(212,160,23,0.19)',
+                }}
+              >
+                {publishing ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <Globe size={16} />
+                )}
+                {isPublished ? 'Republish Tour' : 'Publish Tour'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile upload button */}
+      <div className="md:hidden fixed bottom-6 right-6 z-50">
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="h-14 w-14 rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105 disabled:opacity-50"
+          style={{
+            backgroundColor: '#D4A017',
+            boxShadow: '0 4px 20px rgba(212,160,23,0.35)',
+          }}
+          aria-label="Upload scenes"
+        >
+          {uploading ? (
+            <Loader2 size={24} className="animate-spin" style={{ color: '#0A0908' }} />
+          ) : (
+            <Plus size={24} style={{ color: '#0A0908' }} />
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}

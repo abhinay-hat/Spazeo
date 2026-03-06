@@ -1,47 +1,60 @@
 'use client'
 
 import { useState } from 'react'
-import { useViewer } from '@/hooks/useViewer'
-import type { Scene } from '@/types'
-import { cn } from '@/lib/utils'
 
-interface Props {
-  scenes: Scene[]
-  onSceneChange?: (index: number) => void
+/* eslint-disable @next/next/no-img-element */
+
+interface SceneData {
+  _id: string
+  title: string
+  imageUrl?: string | null
+  thumbnailUrl?: string | null
+  order: number
 }
 
-export function SceneNavigator({ scenes, onSceneChange }: Props) {
-  const { activeSceneIndex, setActiveScene } = useViewer()
-  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+interface Props {
+  scenes: SceneData[]
+  activeSceneId: string | null
+  onSceneChange: (sceneId: string) => void
+}
 
-  if (scenes.length === 0) return null
+export function SceneNavigator({ scenes, activeSceneId, onSceneChange }: Props) {
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
 
-  function handleSelect(index: number) {
-    setActiveScene(index)
-    onSceneChange?.(index)
-  }
+  if (scenes.length <= 1) return null
 
   return (
     <div className="absolute bottom-0 left-0 right-0 px-4 pb-4 z-10">
-      <div className="glass-dark rounded-[12px] p-2 overflow-x-auto flex gap-2 scrollbar-hide">
-        {scenes.map((scene, index) => {
-          const isActive = index === activeSceneIndex
-          const isHovered = hoveredIndex === index
-          const thumbSrc = scene.panorama_url || scene.thumbnail_url
+      <div
+        className="rounded-xl p-2 overflow-x-auto flex gap-2"
+        style={{
+          backgroundColor: 'rgba(10,9,8,0.75)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(212,160,23,0.12)',
+          scrollbarWidth: 'none',
+        }}
+      >
+        {scenes.map((scene) => {
+          const isActive = scene._id === activeSceneId
+          const isHovered = hoveredId === scene._id
+          const thumbSrc = scene.thumbnailUrl || scene.imageUrl
 
           return (
             <button
-              key={scene.id}
-              onClick={() => handleSelect(index)}
-              onMouseEnter={() => setHoveredIndex(index)}
-              onMouseLeave={() => setHoveredIndex(null)}
+              key={scene._id}
+              onClick={() => onSceneChange(scene._id)}
+              onMouseEnter={() => setHoveredId(scene._id)}
+              onMouseLeave={() => setHoveredId(null)}
               aria-label={`Go to scene: ${scene.title}`}
               aria-pressed={isActive}
-              className={cn(
-                'relative w-20 h-14 rounded-[8px] overflow-hidden cursor-pointer flex-shrink-0 transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-600',
-                isActive && 'ring-2 ring-brand-600',
-                !isActive && isHovered && 'ring-2 ring-white/30'
-              )}
+              className="relative w-20 h-14 rounded-lg overflow-hidden cursor-pointer flex-shrink-0 transition-all duration-150 focus-visible:outline-none"
+              style={{
+                border: isActive
+                  ? '2px solid #D4A017'
+                  : isHovered
+                    ? '2px solid rgba(255,255,255,0.3)'
+                    : '2px solid transparent',
+              }}
             >
               {thumbSrc ? (
                 <img
@@ -51,8 +64,14 @@ export function SceneNavigator({ scenes, onSceneChange }: Props) {
                   loading="lazy"
                 />
               ) : (
-                <div className="w-full h-full bg-surface-700 flex items-center justify-center">
-                  <span className="text-[10px] text-surface-400 text-center px-1 leading-tight">
+                <div
+                  className="w-full h-full flex items-center justify-center"
+                  style={{ backgroundColor: '#1B1916' }}
+                >
+                  <span
+                    className="text-[10px] text-center px-1 leading-tight"
+                    style={{ color: '#6B6560' }}
+                  >
                     {scene.title}
                   </span>
                 </div>
@@ -60,7 +79,10 @@ export function SceneNavigator({ scenes, onSceneChange }: Props) {
 
               {/* Hover tooltip with scene title */}
               {isHovered && (
-                <div className="absolute top-0 left-0 right-0 px-1 py-0.5 bg-black/70 z-10">
+                <div
+                  className="absolute top-0 left-0 right-0 px-1 py-0.5 z-10"
+                  style={{ backgroundColor: 'rgba(0,0,0,0.7)' }}
+                >
                   <span className="block text-[10px] text-white truncate leading-tight">
                     {scene.title}
                   </span>
@@ -69,7 +91,10 @@ export function SceneNavigator({ scenes, onSceneChange }: Props) {
 
               {/* Active overlay tint */}
               {isActive && (
-                <div className="absolute inset-0 bg-brand-600/10" />
+                <div
+                  className="absolute inset-0"
+                  style={{ backgroundColor: 'rgba(212,160,23,0.1)' }}
+                />
               )}
             </button>
           )

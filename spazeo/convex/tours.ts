@@ -333,7 +333,7 @@ export const update = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    await getAuthUser(ctx)
+    const user = await getAuthUser(ctx)
 
     const tour = await ctx.db.get(args.tourId)
     if (!tour) throw new Error('Tour not found')
@@ -348,6 +348,14 @@ export const update = mutation({
     }
 
     await ctx.db.patch(tourId, cleanUpdates)
+
+    // Log activity
+    await ctx.runMutation(internal.activity.log, {
+      userId: user._id,
+      type: 'tour_updated',
+      tourId: args.tourId,
+      message: `Updated tour "${tour.title}"`,
+    })
   },
 })
 
@@ -411,6 +419,13 @@ export const archive = mutation({
     if (tour.userId !== user._id) throw new Error('Not authorized')
 
     await ctx.db.patch(args.tourId, { status: 'archived' })
+
+    await ctx.runMutation(internal.activity.log, {
+      userId: user._id,
+      type: 'tour_archived',
+      tourId: args.tourId,
+      message: `Archived tour "${tour.title}"`,
+    })
   },
 })
 
@@ -424,6 +439,27 @@ export const bulkArchive = mutation({
       if (tour && tour.userId === user._id) {
         await ctx.db.patch(tourId, { status: 'archived' })
       }
+    }
+  },
+})
+
+export const bulkPublish = mutation({
+  args: { tourIds: v.array(v.id('tours')) },
+  handler: async (ctx, args) => {
+    const user = await getAuthUser(ctx)
+
+    for (const tourId of args.tourIds) {
+      const tour = await ctx.db.get(tourId)
+      if (!tour || tour.userId !== user._id) continue
+      if (tour.status === 'published') continue
+
+      const scenes = await ctx.db
+        .query('scenes')
+        .withIndex('by_tourId', (q: any) => q.eq('tourId', tourId))
+        .collect()
+      if (scenes.length === 0) continue
+
+      await ctx.db.patch(tourId, { status: 'published', publishedAt: Date.now() })
     }
   },
 })
@@ -576,6 +612,14 @@ export const duplicate = mutation({
       }
     }
 
+    // Log activity
+    await ctx.runMutation(internal.activity.log, {
+      userId: user._id,
+      type: 'tour_duplicated',
+      tourId: newTourId,
+      message: `Duplicated tour "${tour.title}"`,
+    })
+
     return newTourId
   },
 })
@@ -686,6 +730,13 @@ export const remove = mutation({
     for (const lead of leads) {
       await ctx.db.delete(lead._id)
     }
+
+    // Log activity before deleting the tour
+    await ctx.runMutation(internal.activity.log, {
+      userId: user._id,
+      type: 'tour_deleted',
+      message: `Deleted tour "${tour.title}"`,
+    })
 
     await ctx.db.delete(args.tourId)
   },

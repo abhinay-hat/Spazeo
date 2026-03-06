@@ -4,10 +4,14 @@ import { query, mutation } from './_generated/server'
 export const listByScene = query({
   args: { sceneId: v.id('scenes') },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const hotspots = await ctx.db
       .query('hotspots')
       .withIndex('by_sceneId', (q) => q.eq('sceneId', args.sceneId))
       .collect()
+    return await Promise.all(hotspots.map(async (h) => ({
+      ...h,
+      imageUrl: h.imageStorageId ? await ctx.storage.getUrl(h.imageStorageId) : undefined,
+    })))
   },
 })
 
@@ -25,11 +29,12 @@ export const listByTour = query({
           .query('hotspots')
           .withIndex('by_sceneId', (q) => q.eq('sceneId', scene._id))
           .collect()
-        return hotspots.map((h) => ({
+        return await Promise.all(hotspots.map(async (h) => ({
           ...h,
           sceneTitle: scene.title,
           sceneOrder: scene.order,
-        }))
+          imageUrl: h.imageStorageId ? await ctx.storage.getUrl(h.imageStorageId) : undefined,
+        })))
       })
     )
 
@@ -46,6 +51,9 @@ export const create = mutation({
     tooltip: v.optional(v.string()),
     icon: v.optional(v.string()),
     content: v.optional(v.string()),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    imageStorageId: v.optional(v.id('_storage')),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()
@@ -63,6 +71,9 @@ export const update = mutation({
     tooltip: v.optional(v.string()),
     icon: v.optional(v.string()),
     content: v.optional(v.string()),
+    title: v.optional(v.string()),
+    description: v.optional(v.string()),
+    imageStorageId: v.optional(v.id('_storage')),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity()

@@ -171,6 +171,33 @@ export const GATE_BEHAVIOR_OPTIONS = [
   { value: 'optional_sidebar', label: 'Optional Sidebar', description: 'Show lead form as an optional sidebar' },
 ] as const
 
+// --- PRD-003: Onboarding Options ---
+
+export const ROLE_OPTIONS = [
+  { value: 'agent', label: 'Real Estate Agent', description: 'I list and sell properties', icon: 'Home' },
+  { value: 'developer', label: 'Property Developer', description: 'I build residential/commercial projects', icon: 'Building2' },
+  { value: 'photographer', label: 'Photographer / Videographer', description: 'I create virtual tours for clients', icon: 'Camera' },
+  { value: 'manager', label: 'Property Manager', description: 'I manage properties and tenants', icon: 'Key' },
+  { value: 'other', label: 'Other', description: 'Tell us what you do', icon: 'User' },
+] as const
+
+export const PROPERTY_FOCUS_OPTIONS = [
+  { value: 'residential', label: 'Residential' },
+  { value: 'commercial', label: 'Commercial' },
+  { value: 'hospitality', label: 'Hospitality' },
+  { value: 'industrial', label: 'Industrial' },
+  { value: 'mixed_use', label: 'Mixed Use' },
+] as const
+
+export const CAMERA_TYPE_OPTIONS = [
+  { value: 'insta360', label: 'Insta360 X3/X4', icon: 'Camera' },
+  { value: 'ricoh_theta', label: 'Ricoh Theta Z1/X', icon: 'Camera' },
+  { value: 'gopro_max', label: 'GoPro MAX', icon: 'Camera' },
+  { value: 'smartphone', label: 'Smartphone', icon: 'Smartphone' },
+  { value: 'dslr_adapter', label: 'DSLR + Adapter', icon: 'Aperture' },
+  { value: 'other', label: 'Other', icon: 'HelpCircle' },
+] as const
+
 // --- PRD-010: 3D Building Viewer ---
 
 export const BUILDING_ENVIRONMENT_OPTIONS = [

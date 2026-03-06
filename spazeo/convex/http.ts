@@ -280,7 +280,29 @@ http.route({
 
     try {
       switch (eventType) {
-        case 'user.created':
+        case 'user.created': {
+          const userData = body.data
+          const email = userData.email_addresses?.[0]?.email_address ?? ''
+          const name =
+            `${userData.first_name ?? ''} ${userData.last_name ?? ''}`.trim() ||
+            (email ?? 'User')
+
+          await ctx.runMutation(internal.users.upsertFromClerk, {
+            clerkId: userData.id,
+            email,
+            name,
+            avatarUrl: userData.image_url ?? undefined,
+          })
+
+          // Send welcome email to new users
+          if (email) {
+            await ctx.scheduler.runAfter(0, internal.emails.sendWelcomeEmail, {
+              email,
+              name,
+            })
+          }
+          break
+        }
         case 'user.updated': {
           const userData = body.data
           await ctx.runMutation(internal.users.upsertFromClerk, {
@@ -301,6 +323,17 @@ http.route({
           if (userData.id) {
             await ctx.runMutation(internal.users.deleteByClerkId, {
               clerkId: userData.id,
+            })
+          }
+          break
+        }
+
+        case 'session.created': {
+          const sessionData = body.data
+          const userId = sessionData.user_id
+          if (userId) {
+            await ctx.runMutation(internal.users.recordLogin, {
+              clerkId: userId,
             })
           }
           break

@@ -1,69 +1,94 @@
 'use client'
 
 import { Minus, Plus, RotateCw, Maximize2, Minimize2 } from 'lucide-react'
-import { useViewer } from '@/hooks/useViewer'
-import { cn } from '@/lib/utils'
 
-export function ViewerControls() {
-  const {
-    zoomLevel,
-    zoomIn,
-    zoomOut,
-    isAutoRotating,
-    toggleAutoRotate,
-    isFullscreen,
-    toggleFullscreen,
-  } = useViewer()
+interface Props {
+  zoomLevel: number
+  isAutoRotating: boolean
+  isFullscreen: boolean
+  onZoomIn: () => void
+  onZoomOut: () => void
+  onToggleAutoRotate: () => void
+  onToggleFullscreen: () => void
+}
 
+export function ViewerControls({
+  zoomLevel,
+  isAutoRotating,
+  isFullscreen,
+  onZoomIn,
+  onZoomOut,
+  onToggleAutoRotate,
+  onToggleFullscreen,
+}: Props) {
   return (
     <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
-      <div className="glass-dark rounded-full px-4 py-2 flex items-center gap-2">
+      <div
+        className="rounded-full px-4 py-2 flex items-center gap-2"
+        style={{
+          backgroundColor: 'rgba(10,9,8,0.75)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(212,160,23,0.12)',
+        }}
+      >
         {/* Zoom Out */}
         <button
-          onClick={zoomOut}
+          onClick={onZoomOut}
           aria-label="Zoom out"
-          className="w-8 h-8 rounded-full hover:bg-white/10 text-surface-200 hover:text-white flex items-center justify-center transition-colors"
+          className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+          style={{ color: '#A8A29E' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#F5F3EF'; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#A8A29E'; e.currentTarget.style.backgroundColor = 'transparent' }}
         >
           <Minus size={16} strokeWidth={1.5} />
         </button>
 
         {/* Zoom Level */}
-        <span className="text-xs text-surface-300 min-w-[32px] text-center tabular-nums">
+        <span
+          className="text-xs min-w-[32px] text-center tabular-nums"
+          style={{ color: '#A8A29E' }}
+        >
           {zoomLevel.toFixed(1)}x
         </span>
 
         {/* Zoom In */}
         <button
-          onClick={zoomIn}
+          onClick={onZoomIn}
           aria-label="Zoom in"
-          className="w-8 h-8 rounded-full hover:bg-white/10 text-surface-200 hover:text-white flex items-center justify-center transition-colors"
+          className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+          style={{ color: '#A8A29E' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#F5F3EF'; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#A8A29E'; e.currentTarget.style.backgroundColor = 'transparent' }}
         >
           <Plus size={16} strokeWidth={1.5} />
         </button>
 
         {/* Divider */}
-        <div className="h-4 w-px bg-surface-500" />
+        <div className="h-4 w-px" style={{ backgroundColor: '#6B6560' }} />
 
         {/* Auto Rotate */}
         <button
-          onClick={toggleAutoRotate}
+          onClick={onToggleAutoRotate}
           aria-label={isAutoRotating ? 'Stop auto-rotate' : 'Start auto-rotate'}
-          className={cn(
-            'w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center transition-colors',
-            isAutoRotating ? 'text-brand-600' : 'text-surface-200 hover:text-white'
-          )}
+          className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+          style={{ color: isAutoRotating ? '#D4A017' : '#A8A29E' }}
+          onMouseEnter={(e) => { if (!isAutoRotating) { e.currentTarget.style.color = '#F5F3EF'; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)' } }}
+          onMouseLeave={(e) => { if (!isAutoRotating) { e.currentTarget.style.color = '#A8A29E'; e.currentTarget.style.backgroundColor = 'transparent' } }}
         >
           <RotateCw size={16} strokeWidth={1.5} />
         </button>
 
         {/* Divider */}
-        <div className="h-4 w-px bg-surface-500" />
+        <div className="h-4 w-px" style={{ backgroundColor: '#6B6560' }} />
 
         {/* Fullscreen */}
         <button
-          onClick={toggleFullscreen}
+          onClick={onToggleFullscreen}
           aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
-          className="w-8 h-8 rounded-full hover:bg-white/10 text-surface-200 hover:text-white flex items-center justify-center transition-colors"
+          className="w-8 h-8 rounded-full flex items-center justify-center transition-colors"
+          style={{ color: '#A8A29E' }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = '#F5F3EF'; e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)' }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#A8A29E'; e.currentTarget.style.backgroundColor = 'transparent' }}
         >
           {isFullscreen ? (
             <Minimize2 size={16} strokeWidth={1.5} />
@@ -71,19 +96,6 @@ export function ViewerControls() {
             <Maximize2 size={16} strokeWidth={1.5} />
           )}
         </button>
-
-        {/* Divider */}
-        <div className="h-4 w-px bg-surface-500" />
-
-        {/* Compass */}
-        <div
-          aria-hidden="true"
-          className="w-7 h-7 rounded-full border border-surface-500 flex items-center justify-center bg-white/5 animate-[spin_12s_linear_infinite]"
-        >
-          <span className="text-[10px] font-semibold text-surface-200 leading-none select-none">
-            N
-          </span>
-        </div>
       </div>
     </div>
   )

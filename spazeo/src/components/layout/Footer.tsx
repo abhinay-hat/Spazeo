@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Twitter, Linkedin, Github } from 'lucide-react'
+import { Twitter, Linkedin, Instagram } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
 
 const FOOTER_COLUMNS = [
@@ -32,7 +32,7 @@ const FOOTER_COLUMNS = [
 const SOCIAL_LINKS = [
   { label: 'X (Twitter)', href: 'https://x.com/spazeo', icon: Twitter },
   { label: 'LinkedIn', href: 'https://linkedin.com/company/spazeo', icon: Linkedin },
-  { label: 'GitHub', href: 'https://github.com/spazeo', icon: Github },
+  { label: 'Instagram', href: 'https://instagram.com/spazeo', icon: Instagram },
 ]
 
 export function Footer() {

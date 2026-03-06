@@ -7,6 +7,8 @@ import Image from 'next/image'
 import { SignIn } from '@clerk/nextjs'
 import { Mail, Lock, EyeOff, Eye, ArrowLeft, Check } from 'lucide-react'
 import { isProvidersConfigured } from '@/components/providers/ConvexClientProvider'
+import { AuthErrorBoundary } from '@/components/auth/AuthErrorBoundary'
+import { trackEvent } from '@/lib/posthog'
 import toast from 'react-hot-toast'
 
 function SpazeoLogo() {
@@ -50,6 +52,7 @@ function FallbackLoginForm() {
     setLoading(true)
     // Demo mode — navigate to dashboard
     setTimeout(() => {
+      trackEvent('signin_completed', { method: 'email' })
       toast.success('Welcome back! Redirecting to dashboard...')
       router.push('/dashboard')
     }, 800)
@@ -57,6 +60,7 @@ function FallbackLoginForm() {
 
   const handleSocialLogin = (provider: string) => {
     setLoading(true)
+    trackEvent('signin_completed', { method: provider.toLowerCase() })
     toast.success(`Signing in with ${provider}...`)
     setTimeout(() => {
       router.push('/dashboard')
@@ -290,6 +294,7 @@ function FallbackLoginForm() {
 
 export default function SignInPage() {
   return (
+    <AuthErrorBoundary>
     <div className="flex min-h-screen" style={{ backgroundColor: '#0A0908' }}>
       {/* ── Left Panel — Background Image + Testimonial ── */}
       <div className="hidden lg:flex relative w-1/2 flex-shrink-0 overflow-hidden">
@@ -297,6 +302,7 @@ export default function SignInPage() {
           src="/images/login-bg.png"
           alt="Modern interior space"
           fill
+          sizes="50vw"
           className="object-cover"
           priority
         />
@@ -392,6 +398,18 @@ export default function SignInPage() {
         <div className="flex-1 flex items-center justify-center px-6 sm:px-10 py-8">
           {isProvidersConfigured ? (
             <div className="w-full flex flex-col items-center gap-7" style={{ maxWidth: 400 }}>
+              <div className="flex flex-col items-center gap-1">
+                <span
+                  className="text-3xl font-black tracking-[3px]"
+                  style={{ fontFamily: 'var(--font-display)', color: '#D4A017' }}
+                >
+                  SPAZEO
+                </span>
+                <span
+                  className="inline-block rounded-full"
+                  style={{ width: 8, height: 8, backgroundColor: '#D4A017' }}
+                />
+              </div>
               <div className="w-full">
                 <h1
                   className="text-[32px] font-bold leading-tight"
@@ -407,6 +425,7 @@ export default function SignInPage() {
                 </p>
               </div>
               <SignIn
+                forceRedirectUrl="/dashboard"
                 appearance={{
                   elements: {
                     rootBox: 'w-full',
@@ -415,22 +434,25 @@ export default function SignInPage() {
                     headerTitle: 'hidden',
                     headerSubtitle: 'hidden',
                     socialButtonsBlockButton:
-                      'bg-[#12100E] border-[rgba(212,160,23,0.12)] text-[#F5F3EF] hover:bg-[#1B1916] h-12 rounded-[10px] font-medium cursor-pointer',
+                      'bg-[#12100E] border-[rgba(212,160,23,0.12)] text-[#F5F3EF] hover:bg-[#1B1916] h-12 rounded-[10px] font-medium cursor-pointer transition-colors',
                     socialButtonsBlockButtonText: 'text-[#F5F3EF] text-sm font-medium',
                     formButtonPrimary:
-                      'bg-[#D4A017] hover:bg-[#E5B120] text-[#0A0908] h-[50px] rounded-[10px] font-bold text-[15px] shadow-[0_0_30px_rgba(212,160,23,0.2)] cursor-pointer',
+                      'bg-[#D4A017] hover:bg-[#E5B120] text-[#0A0908] h-[50px] rounded-[10px] font-bold text-[15px] shadow-[0_0_30px_rgba(212,160,23,0.2)] cursor-pointer transition-colors',
+                    formButtonPrimaryHover: 'bg-[#E5B120]',
                     formFieldLabel: 'text-[#A8A29E] text-[13px] font-medium',
                     formFieldInput:
-                      'bg-[#12100E] border-[rgba(212,160,23,0.10)] text-[#F5F3EF] h-12 rounded-lg text-sm focus:border-[#D4A017] focus:ring-0',
-                    footerActionLink: 'text-[#D4A017] hover:text-[#E5B120] font-semibold cursor-pointer',
+                      'bg-[#12100E] border-[rgba(212,160,23,0.10)] text-[#F5F3EF] h-12 rounded-lg text-sm focus:border-[#D4A017] focus:ring-0 focus:shadow-[0_0_0_3px_rgba(212,160,23,0.1)]',
+                    footerActionLink: 'text-[#D4A017] hover:text-[#E5B120] font-semibold cursor-pointer transition-colors',
                     footerActionText: 'text-[#6B6560] text-sm',
-                    identityPreviewEditButton: 'text-[#D4A017] cursor-pointer',
-                    formFieldAction: 'text-[#D4A017] text-[12px] font-medium cursor-pointer',
+                    identityPreviewEditButton: 'text-[#D4A017] hover:text-[#E5B120] cursor-pointer transition-colors',
+                    formFieldAction: 'text-[#D4A017] text-[12px] font-medium cursor-pointer hover:text-[#E5B120] transition-colors',
                     dividerLine: 'bg-[rgba(212,160,23,0.10)]',
                     dividerText: 'text-[#6B6560] text-xs uppercase tracking-wider',
-                    formFieldInputShowPasswordButton: 'text-[#6B6560] hover:text-[#A8A29E] cursor-pointer',
+                    formFieldInputShowPasswordButton: 'text-[#6B6560] hover:text-[#A8A29E] cursor-pointer transition-colors',
+                    formFieldInputPlaceholder: 'text-[#4A4540]',
                     footer: 'bg-transparent',
                     main: 'gap-6',
+                    otpCodeFieldInput: 'bg-[#12100E] border-[rgba(212,160,23,0.10)] text-[#F5F3EF] focus:border-[#D4A017] focus:ring-0',
                   },
                 }}
               />
@@ -451,5 +473,6 @@ export default function SignInPage() {
         </div>
       </div>
     </div>
+    </AuthErrorBoundary>
   )
 }

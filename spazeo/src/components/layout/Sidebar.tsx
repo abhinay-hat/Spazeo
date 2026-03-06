@@ -3,7 +3,9 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { UserButton, useUser } from '@clerk/nextjs'
+import { UserButton, useUser, useClerk } from '@clerk/nextjs'
+import { useQuery } from 'convex/react'
+import { api } from '../../../convex/_generated/api'
 import {
   LayoutDashboard,
   Compass,
@@ -11,6 +13,7 @@ import {
   Users,
   Settings,
   CreditCard,
+  LogOut,
   Menu,
   X,
   type LucideIcon,
@@ -75,11 +78,14 @@ function NavLinkItem({
 function SidebarContent({
   pathname,
   onNavClick,
+  plan,
 }: {
   pathname: string
   onNavClick?: () => void
+  plan?: string
 }) {
   const { user } = useUser()
+  const { signOut } = useClerk()
 
   const isActive = (href: string) => {
     if (href === '/dashboard') return pathname === '/dashboard'
@@ -147,10 +153,26 @@ function SidebarContent({
               fontFamily: 'var(--font-dmsans)',
             }}
           >
-            Pro Plan
+            {plan ? `${plan.charAt(0).toUpperCase() + plan.slice(1)} Plan` : 'Free Plan'}
           </span>
         </div>
       </div>
+
+      {/* Logout button */}
+      <button
+        onClick={() => signOut({ redirectUrl: '/' })}
+        className="flex items-center gap-3 w-full px-3 py-2.5 mt-2 rounded-lg text-sm text-[#A8A29E] transition-all duration-200 hover:text-[#F87171] hover:bg-[rgba(248,113,113,0.06)] cursor-pointer"
+        style={{ fontFamily: 'var(--font-dmsans)' }}
+        aria-label="Sign out"
+      >
+        <LogOut
+          size={20}
+          strokeWidth={1.5}
+          className="shrink-0 text-[#6B6560]"
+          aria-hidden="true"
+        />
+        Log Out
+      </button>
     </div>
   )
 }
@@ -158,6 +180,7 @@ function SidebarContent({
 export function Sidebar() {
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = useState(false)
+  const currentUser = useQuery(api.users.getCurrent)
 
   useEffect(() => {
     setMobileOpen(false)
@@ -181,7 +204,7 @@ export function Sidebar() {
         className="hidden md:flex fixed left-0 top-0 w-[240px] h-full flex-col z-30 bg-[#12100E] border-r border-[rgba(212,160,23,0.12)]"
         aria-label="Dashboard sidebar"
       >
-        <SidebarContent pathname={pathname} />
+        <SidebarContent pathname={pathname} plan={currentUser?.plan} />
       </aside>
 
       {/* Mobile toggle button */}
@@ -234,6 +257,7 @@ export function Sidebar() {
               <SidebarContent
                 pathname={pathname}
                 onNavClick={() => setMobileOpen(false)}
+                plan={currentUser?.plan}
               />
             </motion.div>
           </>

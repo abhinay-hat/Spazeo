@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { Navbar } from '@/components/layout/Navbar'
+import { Footer } from '@/components/layout/Footer'
 import {
   ArrowRight,
   Check,
@@ -18,10 +19,6 @@ import {
   LayoutGrid,
   ShoppingBag,
   Code,
-  Twitter,
-  Linkedin,
-  Instagram,
-  Youtube,
   type LucideIcon,
 } from 'lucide-react'
 import { Logo } from '@/components/ui/Logo'
@@ -113,50 +110,6 @@ const INTEGRATIONS = [
   },
 ]
 
-const FOOTER_COLUMNS = [
-  {
-    heading: 'Product',
-    links: [
-      { label: 'Features', href: '/#features' },
-      { label: 'Pricing', href: '/#pricing' },
-      { label: 'Integrations', href: '/product#integrations' },
-      { label: 'Changelog', href: '/changelog' },
-    ],
-  },
-  {
-    heading: 'Company',
-    links: [
-      { label: 'About', href: '/about' },
-      { label: 'Blog', href: '/blog' },
-      { label: 'Careers', href: '/careers' },
-      { label: 'Contact', href: '/contact' },
-    ],
-  },
-  {
-    heading: 'Resources',
-    links: [
-      { label: 'Documentation', href: '/docs' },
-      { label: 'Help Center', href: '/help' },
-      { label: 'API Reference', href: '/api-reference' },
-      { label: 'Community', href: '/community' },
-    ],
-  },
-  {
-    heading: 'Legal',
-    links: [
-      { label: 'Privacy Policy', href: '/privacy' },
-      { label: 'Terms of Service', href: '/terms' },
-      { label: 'Cookie Policy', href: '/cookies' },
-    ],
-  },
-]
-
-const SOCIAL_LINKS = [
-  { label: 'Twitter', icon: Twitter, href: 'https://x.com/spazeo' },
-  { label: 'LinkedIn', icon: Linkedin, href: 'https://linkedin.com/company/spazeo' },
-  { label: 'Instagram', icon: Instagram, href: 'https://instagram.com/spazeo' },
-  { label: 'YouTube', icon: Youtube, href: 'https://youtube.com/@spazeo' },
-]
 
 /* ═══════════════════════════════════════════════════════════════════
    PAGE
@@ -480,94 +433,7 @@ export default function ProductPage() {
           </div>
         </section>
 
-        {/* ─── FOOTER ───────────────────────────────────────────────── */}
-        <footer
-          aria-label="Site footer"
-          style={{
-            background: '#12100E',
-            borderTop: '1px solid rgba(212,160,23,0.12)',
-          }}
-        >
-          {/* Top section */}
-          <div className="max-w-7xl mx-auto px-6 lg:px-[60px] pt-[60px] pb-12">
-            <div className="flex flex-col md:flex-row justify-between gap-12">
-              {/* Brand column */}
-              <div className="max-w-[280px]">
-                <Logo href="/" />
-                <p
-                  className="text-sm leading-relaxed mt-4"
-                  style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
-                >
-                  Step Inside Any Space
-                </p>
-              </div>
-
-              {/* Link columns */}
-              <div className="flex gap-16 flex-wrap">
-                {FOOTER_COLUMNS.map((column) => (
-                  <div key={column.heading}>
-                    <h3
-                      className="text-[13px] font-bold mb-4"
-                      style={{ color: '#F5F3EF', fontFamily: 'var(--font-display)' }}
-                    >
-                      {column.heading}
-                    </h3>
-                    <ul className="flex flex-col gap-4">
-                      {column.links.map((link) => (
-                        <li key={link.href}>
-                          <Link
-                            href={link.href}
-                            className="text-[13px] transition-colors duration-200 hover:text-[#A8A29E]"
-                            style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
-                          >
-                            {link.label}
-                          </Link>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Divider */}
-          <div
-            className="mx-6 lg:mx-[60px] max-w-7xl"
-            style={{ height: 1, background: 'rgba(212,160,23,0.12)' }}
-          />
-
-          {/* Bottom bar */}
-          <div className="max-w-7xl mx-auto px-6 lg:px-[60px] py-6">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-              <p
-                className="text-xs"
-                style={{ color: '#5A5248', fontFamily: 'var(--font-dmsans)' }}
-              >
-                &copy; {new Date().getFullYear()} Spazeo. All rights reserved.
-              </p>
-
-              <div className="flex items-center gap-4">
-                {SOCIAL_LINKS.map((social) => {
-                  const Icon = social.icon
-                  return (
-                    <a
-                      key={social.label}
-                      href={social.href}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      aria-label={`Spazeo on ${social.label}`}
-                      className="transition-colors duration-200 hover:text-[#D4A017]"
-                      style={{ color: '#6B6560' }}
-                    >
-                      <Icon size={18} />
-                    </a>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </footer>
+        <Footer />
 
       </main>
     </>

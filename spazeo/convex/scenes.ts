@@ -6,6 +6,14 @@ import { internal as _internal } from './_generated/api'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const internal = _internal as any
 
+const SCENE_LIMITS: Record<string, number> = {
+  free: 10,
+  starter: 25,
+  professional: 50,
+  business: -1, // unlimited
+  enterprise: -1,
+}
+
 export const listByTour = query({
   args: { tourId: v.id('tours') },
   handler: async (ctx, args) => {
@@ -74,6 +82,20 @@ export const create = mutation({
       .unique()
     if (!user) throw new Error('User not found')
 
+    // Enforce plan scene-per-tour limits
+    const sceneLimit = SCENE_LIMITS[user.plan] ?? 10
+    if (sceneLimit !== -1) {
+      const existingScenes = await ctx.db
+        .query('scenes')
+        .withIndex('by_tourId', (q) => q.eq('tourId', args.tourId))
+        .collect()
+      if (existingScenes.length >= sceneLimit) {
+        throw new Error(
+          `Scene limit reached. Your ${user.plan} plan allows ${sceneLimit} scenes per tour. Upgrade your plan to add more.`
+        )
+      }
+    }
+
     const sceneId = await ctx.db.insert('scenes', {
       tourId: args.tourId,
       title: args.title,
@@ -90,11 +112,22 @@ export const create = mutation({
       message: `Uploaded scene "${args.title}"`,
     })
 
-    // Auto-trigger AI analysis on upload
-    await ctx.scheduler.runAfter(0, internal.aiActions.analyzeScene, {
+    // Auto-trigger AI analysis on upload (use internal action to avoid auth issues in scheduler)
+    const jobId = await ctx.runMutation(internal.aiHelpers.createJob, {
       tourId: args.tourId,
       sceneId,
+      type: 'scene_analysis' as const,
+      provider: 'openai',
+      userId: user._id,
+      creditsUsed: 1,
+    })
+
+    await ctx.scheduler.runAfter(0, internal.aiActions.processAnalyzeScene, {
+      jobId,
       sceneStorageId: args.imageStorageId,
+      tourId: args.tourId,
+      sceneId,
+      userId: user._id,
     })
 
     return sceneId
@@ -105,6 +138,7 @@ export const update = mutation({
   args: {
     sceneId: v.id('scenes'),
     title: v.optional(v.string()),
+    description: v.optional(v.string()),
     order: v.optional(v.number()),
     roomType: v.optional(v.string()),
     aiAnalysis: v.optional(
@@ -195,6 +229,11 @@ export const remove = mutation({
     const identity = await ctx.auth.getUserIdentity()
     if (!identity) throw new Error('Not authenticated')
 
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+
     const hotspots = await ctx.db
       .query('hotspots')
       .withIndex('by_sceneId', (q) => q.eq('sceneId', args.sceneId))
@@ -218,6 +257,16 @@ export const remove = mutation({
       const tour = await ctx.db.get(scene.tourId)
       if (tour && tour.coverSceneId === args.sceneId) {
         await ctx.db.patch(scene.tourId, { coverSceneId: undefined })
+      }
+
+      // Log activity
+      if (user) {
+        await ctx.runMutation(internal.activity.log, {
+          userId: user._id,
+          type: 'scene_removed',
+          tourId: scene.tourId,
+          message: `Removed scene "${scene.title}" from tour`,
+        })
       }
     }
 

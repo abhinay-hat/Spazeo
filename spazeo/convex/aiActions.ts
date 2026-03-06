@@ -1,6 +1,7 @@
 import { v } from 'convex/values'
 import { action, internalAction } from './_generated/server'
 import { internal as _internal } from './_generated/api'
+import { Id } from './_generated/dataModel'
 
 // Cast to break circular type reference (api.d.ts imports this module's types)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,6 +104,14 @@ export const analyzeScene = action({
         message: 'AI scene analysis completed',
       })
 
+      await ctx.runMutation(internal.notifications.create, {
+        userId: user._id,
+        type: 'ai_completed' as const,
+        title: 'AI analysis complete',
+        message: `Scene analysis finished with quality score ${analysis.qualityScore ?? 'N/A'}/10`,
+        tourId: args.tourId,
+      })
+
       return analysis
     } catch (error) {
       await ctx.runMutation(internal.aiHelpers.updateJobStatus, {
@@ -121,6 +130,9 @@ export const processAnalyzeScene = internalAction({
   args: {
     jobId: v.id('aiJobs'),
     sceneStorageId: v.id('_storage'),
+    tourId: v.optional(v.id('tours')),
+    sceneId: v.optional(v.id('scenes')),
+    userId: v.optional(v.id('users')),
   },
   handler: async (ctx, args) => {
     await ctx.runMutation(internal.aiHelpers.updateJobStatus, {
@@ -160,13 +172,53 @@ export const processAnalyzeScene = internalAction({
 
       const data = await response.json()
       const analysis = JSON.parse(data.choices[0].message.content)
+      const duration = Date.now() - startTime
+
+      // Update scene with AI analysis results if sceneId was provided
+      if (args.sceneId) {
+        await ctx.runMutation(internal.scenes.updateAiAnalysis, {
+          sceneId: args.sceneId,
+          roomType: analysis.roomType,
+          aiAnalysis: {
+            objects: analysis.objects,
+            features: analysis.features,
+            qualityScore: analysis.qualityScore,
+            suggestions: analysis.suggestions,
+          },
+        })
+      }
 
       await ctx.runMutation(internal.aiHelpers.updateJobStatus, {
         jobId: args.jobId,
         status: 'completed',
         output: analysis,
-        duration: Date.now() - startTime,
+        duration,
       })
+
+      // Deduct credits and log activity if userId was provided
+      if (args.userId) {
+        await ctx.runMutation(internal.aiHelpers.deductUserCredits, {
+          userId: args.userId,
+          credits: 1,
+        })
+
+        if (args.tourId) {
+          await ctx.runMutation(internal.activity.log, {
+            userId: args.userId,
+            type: 'ai_completed',
+            tourId: args.tourId,
+            message: 'AI scene analysis completed',
+          })
+
+          await ctx.runMutation(internal.notifications.create, {
+            userId: args.userId as Id<'users'>,
+            type: 'ai_completed' as const,
+            title: 'AI analysis complete',
+            message: `Scene analysis finished with quality score ${analysis.qualityScore ?? 'N/A'}/10`,
+            tourId: args.tourId as Id<'tours'>,
+          })
+        }
+      }
 
       return analysis
     } catch (error) {
@@ -304,6 +356,14 @@ export const stageScene = action({
         type: 'ai_completed',
         tourId: args.tourId,
         message: `AI virtual staging completed (${args.style} style)`,
+      })
+
+      await ctx.runMutation(internal.notifications.create, {
+        userId: user._id,
+        type: 'ai_completed' as const,
+        title: 'Virtual staging complete',
+        message: `Your ${args.style} staging is ready to view`,
+        tourId: args.tourId,
       })
 
       return { jobId, storageId }
@@ -492,6 +552,14 @@ export const enhanceImage = action({
         message: 'AI image enhancement completed',
       })
 
+      await ctx.runMutation(internal.notifications.create, {
+        userId: user._id,
+        type: 'ai_completed' as const,
+        title: 'Image enhancement complete',
+        message: 'Your enhanced image is ready to view',
+        tourId: args.tourId,
+      })
+
       return { jobId, enhancedUrl }
     } catch (error) {
       await ctx.runMutation(internal.aiHelpers.updateJobStatus, {
@@ -666,6 +734,14 @@ export const generateDescription = action({
         type: 'ai_completed',
         tourId: args.tourId,
         message: 'AI description generated',
+      })
+
+      await ctx.runMutation(internal.notifications.create, {
+        userId: user._id,
+        type: 'ai_completed' as const,
+        title: 'Description generated',
+        message: 'Your AI-generated property description is ready',
+        tourId: args.tourId,
       })
 
       return description

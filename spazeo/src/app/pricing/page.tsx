@@ -1,68 +1,137 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import Link from 'next/link'
 import { Navbar } from '@/components/layout/Navbar'
-import { Check, X, ChevronDown, ArrowRight } from 'lucide-react'
+import { Check, X, ChevronDown, ArrowRight, Minus } from 'lucide-react'
+import { trackEvent } from '@/lib/posthog'
+
+/* ─── Plan Data ─────────────────────────────────────────────── */
 
 const PLANS = [
   {
-    name: 'Starter',
-    price: { monthly: 0, yearly: 0 },
-    description: 'Perfect for trying out Spazeo',
+    id: 'free',
+    name: 'Free',
+    price: { monthly: 0, annual: 0 },
+    description: 'Get started with the basics',
     badge: null,
-    checkColor: '#34D399',
+    accent: '#34D399',
     cardBorder: 'rgba(212,160,23,0.12)',
     cardBg: '#12100E',
-    ctaStyle: 'outline-gold' as const,
+    ctaVariant: 'outline-gold' as const,
     ctaLabel: 'Get Started Free',
+    ctaHref: '/sign-up',
     features: [
-      '3 active tours',
-      'Basic panorama viewer',
-      'Shareable links',
+      '3 virtual tours',
+      '10 scenes per tour',
+      'Basic 360 viewer',
+      'Spazeo watermark',
       'Community support',
-      'Standard image quality',
     ],
   },
   {
+    id: 'pro',
     name: 'Pro',
-    price: { monthly: 49, yearly: 39 },
-    description: 'For professionals who need more',
-    badge: 'MOST POPULAR',
-    checkColor: '#D4A017',
-    cardBorder: 'rgba(212,160,23,0.3)',
+    price: { monthly: 29, annual: 23 },
+    description: 'Everything you need to grow',
+    badge: 'Most Popular',
+    accent: '#D4A017',
+    cardBorder: 'rgba(212,160,23,0.35)',
     cardBg: '#1B1916',
-    ctaStyle: 'filled-gold' as const,
-    ctaLabel: 'Get Started',
+    ctaVariant: 'filled-gold' as const,
+    ctaLabel: 'Start Pro Trial',
+    ctaHref: '/sign-up?plan=pro',
     features: [
       'Unlimited tours',
-      'Gaussian Splatting',
-      'AI virtual staging',
-      'Analytics dashboard',
-      'Custom branding',
+      '50 scenes per tour',
+      'AI scene analysis',
+      'Virtual staging',
+      'Lead capture forms',
+      'Custom branding (no watermark)',
       'Priority support',
     ],
   },
   {
+    id: 'enterprise',
     name: 'Enterprise',
-    price: { monthly: -1, yearly: -1 },
+    price: { monthly: -1, annual: -1 },
     description: 'For teams and large organizations',
     badge: null,
-    checkColor: '#2DD4BF',
+    accent: '#2DD4BF',
     cardBorder: 'rgba(45,212,191,0.2)',
     cardBg: '#12100E',
-    ctaStyle: 'outline-teal' as const,
+    ctaVariant: 'outline-teal' as const,
     ctaLabel: 'Contact Sales',
+    ctaHref: 'mailto:sales@spazeo.io',
     features: [
       'Everything in Pro',
-      'SSO & SAML',
-      'SOC 2 compliance',
+      'Unlimited scenes',
+      'Team collaboration',
+      'Custom domain',
+      'API access',
       'Dedicated account manager',
-      'White-label solution',
-      'SLA & 24/7 support',
+      'SSO & advanced security',
     ],
   },
 ]
+
+/* ─── Feature Comparison ────────────────────────────────────── */
+
+type FeatureValue = boolean | string
+
+interface ComparisonCategory {
+  category: string
+  rows: { label: string; free: FeatureValue; pro: FeatureValue; enterprise: FeatureValue }[]
+}
+
+const COMPARISON: ComparisonCategory[] = [
+  {
+    category: 'Tours & Scenes',
+    rows: [
+      { label: 'Virtual tours', free: '3', pro: 'Unlimited', enterprise: 'Unlimited' },
+      { label: 'Scenes per tour', free: '10', pro: '50', enterprise: 'Unlimited' },
+      { label: '360 panorama viewer', free: true, pro: true, enterprise: true },
+      { label: 'Tour embedding', free: false, pro: true, enterprise: true },
+    ],
+  },
+  {
+    category: 'AI Features',
+    rows: [
+      { label: 'AI scene analysis', free: false, pro: true, enterprise: true },
+      { label: 'Virtual staging', free: false, pro: true, enterprise: true },
+      { label: 'AI descriptions', free: false, pro: true, enterprise: true },
+      { label: 'Floor plan generation', free: false, pro: false, enterprise: true },
+    ],
+  },
+  {
+    category: 'Marketing & Leads',
+    rows: [
+      { label: 'Lead capture forms', free: false, pro: true, enterprise: true },
+      { label: 'Custom branding', free: false, pro: true, enterprise: true },
+      { label: 'Analytics dashboard', free: 'Basic', pro: 'Advanced', enterprise: 'Advanced' },
+      { label: 'Custom domain', free: false, pro: false, enterprise: true },
+    ],
+  },
+  {
+    category: 'Collaboration & Security',
+    rows: [
+      { label: 'Team members', free: '1', pro: '1', enterprise: 'Unlimited' },
+      { label: 'API access', free: false, pro: false, enterprise: true },
+      { label: 'SSO / SAML', free: false, pro: false, enterprise: true },
+      { label: 'SLA guarantee', free: false, pro: false, enterprise: true },
+    ],
+  },
+  {
+    category: 'Support',
+    rows: [
+      { label: 'Community support', free: true, pro: true, enterprise: true },
+      { label: 'Priority support', free: false, pro: true, enterprise: true },
+      { label: 'Dedicated account manager', free: false, pro: false, enterprise: true },
+    ],
+  },
+]
+
+/* ─── FAQ Data ──────────────────────────────────────────────── */
 
 const FAQ_ITEMS = [
   {
@@ -73,7 +142,7 @@ const FAQ_ITEMS = [
   {
     question: 'What happens when my trial ends?',
     answer:
-      'After your 14-day free trial ends, you\'ll automatically be moved to the Starter plan. You won\'t lose any of your existing tours, but you\'ll be limited to 3 active tours until you upgrade.',
+      'After your 14-day free trial ends, you\'ll automatically be moved to the Free plan. You won\'t lose any of your existing tours, but you\'ll be limited to 3 active tours until you upgrade.',
   },
   {
     question: 'Do you offer discounts for annual billing?',
@@ -85,18 +154,37 @@ const FAQ_ITEMS = [
     answer:
       'We accept all major credit cards (Visa, Mastercard, American Express), as well as bank transfers for Enterprise plans. All payments are securely processed through Stripe.',
   },
+  {
+    question: 'Is there a limit on tour views?',
+    answer:
+      'No. All plans include unlimited tour views for your visitors. We never restrict the number of people who can experience your virtual tours.',
+  },
+  {
+    question: 'Can I cancel my subscription?',
+    answer:
+      'Absolutely. You can cancel your subscription at any time from your billing settings. Your plan will remain active until the end of your current billing period, and you will not be charged again.',
+  },
+  {
+    question: 'Do you offer a refund policy?',
+    answer:
+      'We offer a full refund within the first 14 days of any paid subscription. After that, you can cancel at any time but refunds are not provided for partial billing periods.',
+  },
+  {
+    question: 'What happens to my tours if I downgrade?',
+    answer:
+      'Your existing tours will remain accessible, but you won\'t be able to create new tours beyond your new plan\'s limit. You can archive tours to free up slots at any time.',
+  },
 ]
 
-const FOOTER_LINKS = {
-  Product: ['Virtual Tours', '360° Viewer', 'AI Staging', 'Analytics', 'Integrations'],
-  Company: ['About', 'Careers', 'Blog', 'Press'],
-  Resources: ['Documentation', 'Help Center', 'API Reference', 'Status'],
-  Legal: ['Privacy Policy', 'Terms of Service', 'Cookie Policy'],
-}
+/* ─── Component ─────────────────────────────────────────────── */
 
 export default function PricingPage() {
-  const [billing, setBilling] = useState<'monthly' | 'yearly'>('monthly')
+  const [billing, setBilling] = useState<'monthly' | 'annual'>('monthly')
   const [openFaq, setOpenFaq] = useState<number | null>(null)
+
+  useEffect(() => {
+    trackEvent('pricing_viewed')
+  }, [])
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -117,7 +205,7 @@ export default function PricingPage() {
     <>
       <Navbar />
       <main style={{ backgroundColor: '#0A0908', minHeight: '100vh' }}>
-        {/* ── Hero ── */}
+        {/* ── Hero ───────────────────────────────────────────── */}
         <section
           className="pt-32 pb-16 text-center"
           style={{
@@ -126,7 +214,6 @@ export default function PricingPage() {
           }}
         >
           <div className="max-w-4xl mx-auto px-6 animate-on-scroll">
-            {/* Badge */}
             <span
               className="inline-block text-xs font-semibold uppercase tracking-[0.16em] px-4 py-1.5 rounded-full mb-6"
               style={{
@@ -159,10 +246,10 @@ export default function PricingPage() {
                 fontFamily: 'var(--font-dmsans)',
               }}
             >
-              Start free. Upgrade when you need more power.
+              Start free, scale as you grow
             </p>
 
-            {/* Monthly / Yearly Toggle */}
+            {/* Monthly / Annual Toggle */}
             <div className="flex items-center justify-center gap-3 mt-8">
               <span
                 className="text-sm font-medium"
@@ -175,20 +262,22 @@ export default function PricingPage() {
               </span>
 
               <button
-                onClick={() => setBilling((b) => (b === 'monthly' ? 'yearly' : 'monthly'))}
+                onClick={() =>
+                  setBilling((b) => (b === 'monthly' ? 'annual' : 'monthly'))
+                }
                 className="relative w-12 h-6 rounded-full transition-colors duration-300"
                 style={{
                   backgroundColor:
-                    billing === 'yearly' ? '#D4A017' : 'rgba(212,160,23,0.2)',
+                    billing === 'annual' ? '#D4A017' : 'rgba(212,160,23,0.2)',
                 }}
-                aria-label={`Switch to ${billing === 'monthly' ? 'yearly' : 'monthly'} billing`}
+                aria-label={`Switch to ${billing === 'monthly' ? 'annual' : 'monthly'} billing`}
               >
                 <span
                   className="absolute top-0.5 w-5 h-5 rounded-full transition-transform duration-300"
                   style={{
-                    backgroundColor: billing === 'yearly' ? '#0A0908' : '#A8A29E',
+                    backgroundColor: billing === 'annual' ? '#0A0908' : '#A8A29E',
                     transform:
-                      billing === 'yearly' ? 'translateX(26px)' : 'translateX(2px)',
+                      billing === 'annual' ? 'translateX(26px)' : 'translateX(2px)',
                   }}
                 />
               </button>
@@ -196,14 +285,14 @@ export default function PricingPage() {
               <span
                 className="text-sm font-medium"
                 style={{
-                  color: billing === 'yearly' ? '#F5F3EF' : '#6B6560',
+                  color: billing === 'annual' ? '#F5F3EF' : '#6B6560',
                   fontFamily: 'var(--font-dmsans)',
                 }}
               >
-                Yearly
+                Annual
               </span>
 
-              {billing === 'yearly' && (
+              {billing === 'annual' && (
                 <span
                   className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
                   style={{
@@ -219,21 +308,19 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* ── Pricing Cards ── */}
+        {/* ── Pricing Cards ─────────────────────────────────── */}
         <section className="pb-24 px-6">
-          <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 sm:overflow-x-auto md:grid-cols-3 gap-6">
             {PLANS.map((plan, i) => (
               <div
-                key={plan.name}
+                key={plan.id}
                 className="animate-on-scroll rounded-2xl p-8 relative flex flex-col"
                 style={{
                   backgroundColor: plan.cardBg,
                   border: `1px solid ${plan.cardBorder}`,
                   animationDelay: `${i * 100}ms`,
-                  ...(plan.name === 'Pro'
-                    ? {
-                        boxShadow: '0 0 40px rgba(212,160,23,0.08)',
-                      }
+                  ...(plan.id === 'pro'
+                    ? { boxShadow: '0 0 40px rgba(212,160,23,0.08)' }
                     : {}),
                 }}
               >
@@ -280,11 +367,11 @@ export default function PricingPage() {
                       <span
                         className="text-4xl font-black"
                         style={{
-                          color: plan.name === 'Pro' ? '#D4A017' : '#F5F3EF',
+                          color: plan.id === 'pro' ? '#D4A017' : '#F5F3EF',
                           fontFamily: 'var(--font-display)',
                         }}
                       >
-                        ${billing === 'monthly' ? plan.price.monthly : plan.price.yearly}
+                        ${billing === 'monthly' ? plan.price.monthly : plan.price.annual}
                       </span>
                       <span
                         className="text-sm ml-1"
@@ -295,6 +382,16 @@ export default function PricingPage() {
                     </>
                   )}
                 </div>
+
+                {/* Annual savings note */}
+                {billing === 'annual' && plan.price.monthly > 0 && (
+                  <p
+                    className="text-xs mt-1"
+                    style={{ color: '#34D399', fontFamily: 'var(--font-dmsans)' }}
+                  >
+                    Billed ${plan.price.annual * 12}/year
+                  </p>
+                )}
 
                 {/* Features */}
                 <ul className="mt-6 space-y-3 flex-1">
@@ -307,7 +404,7 @@ export default function PricingPage() {
                       <Check
                         size={16}
                         strokeWidth={2.5}
-                        style={{ color: plan.checkColor, flexShrink: 0 }}
+                        style={{ color: plan.accent, flexShrink: 0 }}
                       />
                       {feature}
                     </li>
@@ -316,25 +413,29 @@ export default function PricingPage() {
 
                 {/* CTA */}
                 <Link
-                  href={plan.name === 'Enterprise' ? '/#contact' : '/sign-up'}
+                  href={plan.ctaHref}
+                  onClick={() => trackEvent('plan_selected', { plan: plan.id, billing, location: 'pricing_page' })}
                   className="w-full mt-8 flex items-center justify-center gap-1.5 text-sm font-semibold py-3 rounded-xl transition-all duration-200"
                   style={
-                    plan.ctaStyle === 'filled-gold'
+                    plan.ctaVariant === 'filled-gold'
                       ? {
                           backgroundColor: '#D4A017',
                           color: '#0A0908',
                           boxShadow: '0 0 20px rgba(212,160,23,0.25)',
+                          fontFamily: 'var(--font-dmsans)',
                         }
-                      : plan.ctaStyle === 'outline-teal'
+                      : plan.ctaVariant === 'outline-teal'
                         ? {
                             backgroundColor: 'transparent',
                             color: '#2DD4BF',
                             border: '1.5px solid rgba(45,212,191,0.3)',
+                            fontFamily: 'var(--font-dmsans)',
                           }
                         : {
                             backgroundColor: 'transparent',
                             color: '#D4A017',
                             border: '1.5px solid rgba(212,160,23,0.2)',
+                            fontFamily: 'var(--font-dmsans)',
                           }
                   }
                 >
@@ -346,7 +447,149 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* ── FAQ ── */}
+        {/* ── Feature Comparison Table ───────────────────────── */}
+        <section className="py-20 px-6" style={{ backgroundColor: '#0A0908' }}>
+          <div className="max-w-5xl mx-auto">
+            <h2
+              className="text-center font-bold mb-12 animate-on-scroll"
+              style={{
+                fontSize: 'clamp(28px, 4vw, 40px)',
+                fontFamily: 'var(--font-display)',
+                color: '#F5F3EF',
+                letterSpacing: '-1px',
+              }}
+            >
+              Compare Plans
+            </h2>
+
+            {/* Desktop table */}
+            <div className="hidden md:block animate-on-scroll overflow-x-auto">
+              <table className="w-full" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+                <thead>
+                  <tr>
+                    <th
+                      className="text-left py-4 px-4 text-sm font-medium"
+                      style={{
+                        color: '#6B6560',
+                        fontFamily: 'var(--font-dmsans)',
+                        borderBottom: '1px solid rgba(212,160,23,0.08)',
+                        width: '40%',
+                      }}
+                    >
+                      Feature
+                    </th>
+                    {['Free', 'Pro', 'Enterprise'].map((name) => (
+                      <th
+                        key={name}
+                        className="text-center py-4 px-4 text-sm font-semibold"
+                        style={{
+                          color: name === 'Pro' ? '#D4A017' : '#F5F3EF',
+                          fontFamily: 'var(--font-display)',
+                          borderBottom: '1px solid rgba(212,160,23,0.08)',
+                          width: '20%',
+                        }}
+                      >
+                        {name}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {COMPARISON.map((section) => (
+                    <Fragment key={`cat-${section.category}`}>
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="pt-6 pb-2 px-4 text-xs font-semibold uppercase tracking-wider"
+                          style={{
+                            color: '#A8A29E',
+                            fontFamily: 'var(--font-dmsans)',
+                          }}
+                        >
+                          {section.category}
+                        </td>
+                      </tr>
+                      {section.rows.map((row) => (
+                        <tr
+                          key={row.label}
+                          style={{ borderBottom: '1px solid rgba(255,255,255,0.03)' }}
+                        >
+                          <td
+                            className="py-3 px-4 text-sm"
+                            style={{ color: '#A8A29E', fontFamily: 'var(--font-dmsans)' }}
+                          >
+                            {row.label}
+                          </td>
+                          {([row.free, row.pro, row.enterprise] as FeatureValue[]).map(
+                            (val, idx) => (
+                              <td key={idx} className="py-3 px-4 text-center">
+                                {renderCellValue(val, idx)}
+                              </td>
+                            )
+                          )}
+                        </tr>
+                      ))}
+                    </Fragment>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile comparison - stacked cards */}
+            <div className="md:hidden space-y-6 animate-on-scroll">
+              {COMPARISON.map((section) => (
+                <div key={section.category}>
+                  <h4
+                    className="text-xs font-semibold uppercase tracking-wider mb-3 px-1"
+                    style={{ color: '#A8A29E', fontFamily: 'var(--font-dmsans)' }}
+                  >
+                    {section.category}
+                  </h4>
+                  <div className="space-y-2">
+                    {section.rows.map((row) => (
+                      <div
+                        key={row.label}
+                        className="rounded-xl p-4"
+                        style={{
+                          backgroundColor: '#12100E',
+                          border: '1px solid rgba(212,160,23,0.06)',
+                        }}
+                      >
+                        <p
+                          className="text-sm font-medium mb-2"
+                          style={{ color: '#F5F3EF', fontFamily: 'var(--font-dmsans)' }}
+                        >
+                          {row.label}
+                        </p>
+                        <div className="grid grid-cols-3 gap-2 text-center">
+                          {(['Free', 'Pro', 'Enterprise'] as const).map((planName, idx) => {
+                            const val = idx === 0 ? row.free : idx === 1 ? row.pro : row.enterprise
+                            return (
+                              <div key={planName}>
+                                <p
+                                  className="text-[10px] uppercase tracking-wider mb-1"
+                                  style={{
+                                    color: '#6B6560',
+                                    fontFamily: 'var(--font-dmsans)',
+                                  }}
+                                >
+                                  {planName}
+                                </p>
+                                {renderCellValue(val, idx)}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── FAQ ────────────────────────────────────────────── */}
         <section className="py-20 px-6" style={{ backgroundColor: '#12100E' }}>
           <div className="max-w-3xl mx-auto">
             <h2
@@ -419,7 +662,7 @@ export default function PricingPage() {
           </div>
         </section>
 
-        {/* ── CTA ── */}
+        {/* ── Bottom CTA ────────────────────────────────────── */}
         <section
           className="py-24 px-6 text-center"
           style={{
@@ -428,7 +671,6 @@ export default function PricingPage() {
           }}
         >
           <div className="max-w-2xl mx-auto animate-on-scroll">
-            {/* Gold accent line */}
             <div
               className="mx-auto mb-6"
               style={{
@@ -448,7 +690,7 @@ export default function PricingPage() {
                 letterSpacing: '-1px',
               }}
             >
-              Ready to Get Started?
+              Still have questions?
             </h2>
 
             <p
@@ -459,7 +701,7 @@ export default function PricingPage() {
                 fontFamily: 'var(--font-dmsans)',
               }}
             >
-              Join thousands of professionals creating immersive virtual experiences.
+              Our team is here to help you find the right plan for your business.
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mt-8">
@@ -478,7 +720,7 @@ export default function PricingPage() {
               </Link>
 
               <Link
-                href="/#contact"
+                href="mailto:sales@spazeo.io"
                 className="inline-flex items-center gap-2 px-8 py-3 rounded-xl text-sm font-semibold transition-all duration-200"
                 style={{
                   color: '#D4A017',
@@ -498,158 +740,30 @@ export default function PricingPage() {
             </p>
           </div>
         </section>
-
-        {/* ── Footer ── */}
-        <footer
-          className="border-t px-6 pt-16 pb-8"
-          style={{
-            borderColor: 'rgba(212,160,23,0.08)',
-            backgroundColor: '#0A0908',
-          }}
-        >
-          <div className="max-w-6xl mx-auto">
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-10 mb-12">
-              {/* Brand */}
-              <div className="col-span-2">
-                <Link
-                  href="/"
-                  className="text-xl font-bold"
-                  style={{ fontFamily: 'var(--font-display)', color: '#F5F3EF' }}
-                >
-                  Spazeo
-                </Link>
-                <p
-                  className="mt-3 text-sm leading-relaxed"
-                  style={{
-                    color: '#6B6560',
-                    maxWidth: 260,
-                    fontFamily: 'var(--font-dmsans)',
-                  }}
-                >
-                  <em>Step Inside Any Space.</em> AI-powered 360° virtual tours for real estate
-                  professionals.
-                </p>
-
-                {/* Social icons */}
-                <div className="flex items-center gap-4 mt-5">
-                  {['twitter', 'linkedin', 'youtube', 'instagram'].map((social) => (
-                    <a
-                      key={social}
-                      href={`#${social}`}
-                      className="transition-colors duration-200"
-                      style={{ color: '#6B6560' }}
-                      aria-label={social}
-                      onMouseEnter={(e) =>
-                        (e.currentTarget.style.color = '#D4A017')
-                      }
-                      onMouseLeave={(e) =>
-                        (e.currentTarget.style.color = '#6B6560')
-                      }
-                    >
-                      <svg
-                        width="18"
-                        height="18"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        {social === 'twitter' && (
-                          <path d="M22 4s-.7 2.1-2 3.4c1.6 10-9.4 17.3-18 11.6 2.2.1 4.4-.6 6-2C3 15.5.5 9.6 3 5c2.2 2.6 5.6 4.1 9 4-.9-4.2 4-6.6 7-3.8 1.1 0 3-1.2 3-1.2z" />
-                        )}
-                        {social === 'linkedin' && (
-                          <>
-                            <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
-                            <rect width="4" height="12" x="2" y="9" />
-                            <circle cx="4" cy="4" r="2" />
-                          </>
-                        )}
-                        {social === 'youtube' && (
-                          <>
-                            <path d="M2.5 17a24.12 24.12 0 0 1 0-10 2 2 0 0 1 1.4-1.4 49.56 49.56 0 0 1 16.2 0A2 2 0 0 1 21.5 7a24.12 24.12 0 0 1 0 10 2 2 0 0 1-1.4 1.4 49.55 49.55 0 0 1-16.2 0A2 2 0 0 1 2.5 17" />
-                            <path d="m10 15 5-3-5-3z" />
-                          </>
-                        )}
-                        {social === 'instagram' && (
-                          <>
-                            <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
-                            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
-                            <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
-                          </>
-                        )}
-                      </svg>
-                    </a>
-                  ))}
-                </div>
-              </div>
-
-              {/* Link columns */}
-              {Object.entries(FOOTER_LINKS).map(([title, links]) => (
-                <div key={title}>
-                  <h4
-                    className="text-xs font-semibold uppercase tracking-wider mb-4"
-                    style={{ color: '#A8A29E', fontFamily: 'var(--font-dmsans)' }}
-                  >
-                    {title}
-                  </h4>
-                  <ul className="space-y-2.5">
-                    {links.map((link) => (
-                      <li key={link}>
-                        <a
-                          href="#"
-                          className="text-sm transition-colors duration-200"
-                          style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
-                          onMouseEnter={(e) =>
-                            (e.currentTarget.style.color = '#F5F3EF')
-                          }
-                          onMouseLeave={(e) =>
-                            (e.currentTarget.style.color = '#6B6560')
-                          }
-                        >
-                          {link}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
-            </div>
-
-            {/* Bottom bar */}
-            <div
-              className="pt-6 flex flex-col sm:flex-row items-center justify-between gap-4"
-              style={{ borderTop: '1px solid rgba(212,160,23,0.06)' }}
-            >
-              <p
-                className="text-xs"
-                style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
-              >
-                &copy; {new Date().getFullYear()} Spazeo. All rights reserved.
-              </p>
-              <div className="flex items-center gap-6">
-                {['Privacy', 'Terms', 'Cookies'].map((item) => (
-                  <a
-                    key={item}
-                    href="#"
-                    className="text-xs transition-colors duration-200"
-                    style={{ color: '#6B6560', fontFamily: 'var(--font-dmsans)' }}
-                    onMouseEnter={(e) =>
-                      (e.currentTarget.style.color = '#F5F3EF')
-                    }
-                    onMouseLeave={(e) =>
-                      (e.currentTarget.style.color = '#6B6560')
-                    }
-                  >
-                    {item}
-                  </a>
-                ))}
-              </div>
-            </div>
-          </div>
-        </footer>
       </main>
     </>
+  )
+}
+
+/* ─── Helper: render comparison cell value ──────────────────── */
+
+function renderCellValue(val: FeatureValue, colIdx: number) {
+  if (val === true) {
+    const color = colIdx === 0 ? '#34D399' : colIdx === 1 ? '#D4A017' : '#2DD4BF'
+    return <Check size={16} strokeWidth={2.5} style={{ color, margin: '0 auto' }} />
+  }
+  if (val === false) {
+    return <Minus size={16} strokeWidth={1.5} style={{ color: '#3D3830', margin: '0 auto' }} />
+  }
+  return (
+    <span
+      className="text-sm"
+      style={{
+        color: colIdx === 1 ? '#D4A017' : '#A8A29E',
+        fontFamily: 'var(--font-dmsans)',
+      }}
+    >
+      {val}
+    </span>
   )
 }

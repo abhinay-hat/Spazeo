@@ -19,8 +19,8 @@ export function useAI() {
 }
 
 export function useAIJobs(filters?: {
-  type?: string
-  status?: string
+  type?: 'scene_analysis' | 'staging' | 'description' | 'floor_plan' | 'enhancement' | 'auto_hotspots'
+  status?: 'pending' | 'processing' | 'completed' | 'failed'
   tourId?: Id<'tours'>
 }) {
   return useQuery(api.ai.listJobs, filters ?? {})

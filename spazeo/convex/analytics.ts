@@ -488,6 +488,147 @@ export const rollupDaily = internalMutation({
   },
 })
 
+export const getDashboardOverview = query({
+  args: {
+    period: v.optional(v.union(v.literal('7d'), v.literal('30d'), v.literal('90d'))),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return null
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) return null
+
+    const periodDays = args.period === '7d' ? 7 : args.period === '90d' ? 90 : 30
+    const now = Date.now()
+    const periodStart = now - periodDays * 24 * 60 * 60 * 1000
+    const prevPeriodStart = periodStart - periodDays * 24 * 60 * 60 * 1000
+
+    const tours = await ctx.db
+      .query('tours')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .collect()
+
+    const totalTours = tours.length
+    const publishedTours = tours.filter((t) => t.status === 'published').length
+
+    // Collect all analytics events for user's tours
+    let allEvents: Array<{ event: string; timestamp: number; duration?: number; sessionId: string }> = []
+    let totalLeads = 0
+    let currentLeads = 0
+    let prevLeads = 0
+
+    for (const tour of tours) {
+      const events = await ctx.db
+        .query('analytics')
+        .withIndex('by_tourId', (q) => q.eq('tourId', tour._id))
+        .collect()
+      allEvents = allEvents.concat(events)
+
+      const leads = await ctx.db
+        .query('leads')
+        .withIndex('by_tourId', (q) => q.eq('tourId', tour._id))
+        .collect()
+      totalLeads += leads.length
+      currentLeads += leads.filter((l) => l._creationTime >= periodStart).length
+      prevLeads += leads.filter(
+        (l) => l._creationTime >= prevPeriodStart && l._creationTime < periodStart
+      ).length
+    }
+
+    // Views
+    const viewEvents = allEvents.filter((e) => e.event === 'tour_view')
+    const currentViews = viewEvents.filter((e) => e.timestamp >= periodStart).length
+    const prevViews = viewEvents.filter(
+      (e) => e.timestamp >= prevPeriodStart && e.timestamp < periodStart
+    ).length
+    const totalViews = viewEvents.length
+
+    // Viewing hours (from duration field, in seconds)
+    const allDurations = allEvents
+      .filter((e) => e.duration && e.duration > 0)
+      .map((e) => e.duration!)
+    const totalViewingSeconds = allDurations.reduce((sum, d) => sum + d, 0)
+    const totalViewingHours = Math.floor(totalViewingSeconds / 3600)
+    const totalViewingMinutes = Math.floor((totalViewingSeconds % 3600) / 60)
+
+    const currentDurations = allEvents
+      .filter((e) => e.duration && e.duration > 0 && e.timestamp >= periodStart)
+      .map((e) => e.duration!)
+    const currentViewingSeconds = currentDurations.reduce((sum, d) => sum + d, 0)
+    const prevDurations = allEvents
+      .filter(
+        (e) =>
+          e.duration && e.duration > 0 &&
+          e.timestamp >= prevPeriodStart && e.timestamp < periodStart
+      )
+      .map((e) => e.duration!)
+    const prevViewingSeconds = prevDurations.reduce((sum, d) => sum + d, 0)
+
+    // Tours created in periods
+    const currentTours = tours.filter((t) => t._creationTime >= periodStart).length
+    const prevTours = tours.filter(
+      (t) => t._creationTime >= prevPeriodStart && t._creationTime < periodStart
+    ).length
+
+    // AI jobs completed
+    const aiJobs = await ctx.db
+      .query('aiJobs')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .collect()
+    const completedAiJobs = aiJobs.filter((j) => j.status === 'completed').length
+    const currentAiJobs = aiJobs.filter(
+      (j) => j.status === 'completed' && j._creationTime >= periodStart
+    ).length
+    const prevAiJobs = aiJobs.filter(
+      (j) =>
+        j.status === 'completed' &&
+        j._creationTime >= prevPeriodStart && j._creationTime < periodStart
+    ).length
+
+    // Top tour
+    let topTour: { id: string; title: string; viewCount: number; slug: string } | null = null
+    if (tours.length > 0) {
+      const sorted = [...tours].sort((a, b) => b.viewCount - a.viewCount)
+      topTour = {
+        id: sorted[0]._id,
+        title: sorted[0].title,
+        viewCount: sorted[0].viewCount,
+        slug: sorted[0].slug,
+      }
+    }
+
+    function calcTrend(current: number, previous: number): number {
+      if (previous === 0) return current > 0 ? 100 : 0
+      return Math.round(((current - previous) / previous) * 100)
+    }
+
+    return {
+      totalTours,
+      publishedTours,
+      totalViews,
+      totalLeads,
+      totalViewingHours,
+      totalViewingMinutes,
+      completedAiJobs,
+      topTour,
+      plan: user.plan,
+      aiCreditsUsed: user.aiCreditsUsed ?? 0,
+      trends: {
+        tours: calcTrend(currentTours, prevTours),
+        views: calcTrend(currentViews, prevViews),
+        leads: calcTrend(currentLeads, prevLeads),
+        viewingTime: calcTrend(currentViewingSeconds, prevViewingSeconds),
+        aiJobs: calcTrend(currentAiJobs, prevAiJobs),
+      },
+      conversionRate: totalViews > 0 ? Math.round((totalLeads / totalViews) * 100) : 0,
+    }
+  },
+})
+
 // Internal query for CSV export
 export const getEventsByTourInternal = internalQuery({
   args: {
@@ -600,5 +741,76 @@ export const exportCsv = action({
       rows.map((row: string[]) => row.map((cell) => `"${cell}"`).join(',')).join('\n')
 
     return csv
+  },
+})
+
+export const getTourPerformance = query({
+  args: {
+    period: v.optional(v.union(v.literal('7d'), v.literal('30d'), v.literal('90d'), v.literal('all'))),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity()
+    if (!identity) return []
+
+    const user = await ctx.db
+      .query('users')
+      .withIndex('by_clerkId', (q) => q.eq('clerkId', identity.subject))
+      .unique()
+    if (!user) return []
+
+    const periodDays =
+      args.period === '7d' ? 7 : args.period === '90d' ? 90 : args.period === 'all' ? null : 30
+    const periodStart = periodDays ? Date.now() - periodDays * 24 * 60 * 60 * 1000 : 0
+
+    const tours = await ctx.db
+      .query('tours')
+      .withIndex('by_userId', (q) => q.eq('userId', user._id))
+      .collect()
+
+    const results = []
+
+    for (const tour of tours) {
+      const events = await ctx.db
+        .query('analytics')
+        .withIndex('by_tourId', (q) => q.eq('tourId', tour._id))
+        .collect()
+
+      const periodEvents = periodStart
+        ? events.filter((e) => e.timestamp >= periodStart)
+        : events
+
+      const views = periodEvents.filter((e) => e.event === 'tour_view').length
+      const uniqueSessions = new Set(
+        periodEvents.filter((e) => e.event === 'tour_view').map((e) => e.sessionId)
+      ).size
+
+      const durations = periodEvents.filter((e) => e.duration && e.duration > 0).map((e) => e.duration!)
+      const avgDuration =
+        durations.length > 0
+          ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+          : 0
+
+      const leads = await ctx.db
+        .query('leads')
+        .withIndex('by_tourId', (q) => q.eq('tourId', tour._id))
+        .collect()
+      const periodLeads = periodStart
+        ? leads.filter((l) => l._creationTime >= periodStart)
+        : leads
+
+      results.push({
+        tourId: tour._id,
+        title: tour.title,
+        slug: tour.slug,
+        status: tour.status,
+        views,
+        uniqueVisitors: uniqueSessions,
+        leads: periodLeads.length,
+        avgDuration,
+        totalViews: tour.viewCount,
+      })
+    }
+
+    return results.sort((a, b) => b.views - a.views)
   },
 })
